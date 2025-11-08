@@ -1,4 +1,6 @@
-import idleSheet from '../../assets/Idle.png';
+import type { CSSProperties } from 'react';
+import idleSheet from '../../assets/CatPackPaid/Sprites/Classical/Individual/Idle.png';
+import roomBackdrop from '../../assets/CatRoomPaid/Rooms/Room3.png';
 import './App.css';
 import SpriteAnimator from './components/SpriteAnimator';
 
@@ -33,8 +35,12 @@ function PetScreen() {
     src: idleSheet,
     frameWidth: 32,
     frameHeight: 32,
-    fps: 6,
+    fps: 8,
     scale: 7,
+  };
+
+  const stageStyle: CSSProperties & { '--stage-room'?: string } = {
+    '--stage-room': `url(${roomBackdrop})`,
   };
 
   return (
@@ -42,7 +48,7 @@ function PetScreen() {
       <div className="pet-shell">
         <main className="pet-layout">
           <section className="pet-panel" aria-label="Virtual pet">
-            <div className="pet-stage">
+            <div className="pet-stage" style={stageStyle}>
               <SpriteAnimator
                 src={idleAnimation.src}
                 frameWidth={idleAnimation.frameWidth}
