@@ -1,0 +1,245 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  background: radial-gradient(circle at top right, #2f3b56 0%, #0e1016 55%);
+  color: #f5f7fb;
+}
+
+#root {
+  height: 100%;
+}
+
+.app-root {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.pet-shell {
+  width: min(960px, 94vw);
+  height: min(620px, 90vh);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 32px;
+  border-radius: 32px;
+  backdrop-filter: blur(22px);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(23, 28, 41, 0.6));
+  box-shadow:
+    0 24px 60px rgba(12, 14, 20, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.pet-layout {
+  display: flex;
+  flex: 1;
+  gap: 36px;
+  min-height: 0;
+}
+
+.pet-panel {
+  flex: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pet-stage {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 28px;
+  padding: 32px;
+  background: radial-gradient(circle at 30% 30%, rgba(60, 80, 120, 0.24), rgba(12, 15, 25, 0.6));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.pet-stage .sprite-animator {
+  display: inline-flex;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.32));
+  pointer-events: none;
+}
+
+.sprite-animator__sheet {
+  display: block;
+  background-size: auto 100%;
+  image-rendering: inherit;
+}
+
+.pet-touch-hint {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(245, 247, 251, 0.85);
+}
+
+.context-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.context-card {
+  width: 100%;
+  padding: 28px;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: rgba(18, 24, 36, 0.72);
+  box-shadow:
+    0 16px 40px rgba(8, 12, 20, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.context-message {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  color: rgba(240, 244, 255, 0.92);
+}
+
+.option-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.option-button {
+  position: relative;
+  padding: 16px 18px;
+  border-radius: 18px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 120ms ease, background 160ms ease;
+}
+
+.option-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.option-button:hover {
+  transform: translateY(-2px);
+}
+
+.option-button:hover::after {
+  opacity: 1;
+}
+
+.option-button.primary {
+  border-color: rgba(120, 166, 255, 0.65);
+}
+
+.option-button.secondary {
+  border-color: rgba(150, 255, 220, 0.55);
+}
+
+.hardware-strip {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: 1fr 1fr auto 1fr;
+  gap: 22px;
+  align-items: center;
+  padding: 18px 22px;
+  border-radius: 20px;
+  background: linear-gradient(120deg, rgba(11, 14, 22, 0.8), rgba(32, 41, 64, 0.55));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.hardware-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgba(214, 226, 255, 0.6);
+}
+
+.joystick,
+.knob {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.6));
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.18);
+}
+
+.option-pads,
+.knob-cluster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.round-button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 247, 251, 0.76);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 160ms ease;
+}
+
+.round-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.35);
+}
+
+.round-button.power {
+  font-size: 1.2rem;
+}
+
+@media (max-width: 900px) {
+  .pet-layout {
+    flex-direction: column;
+  }
+
+  .context-panel {
+    width: 100%;
+  }
+
+  .hardware-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    row-gap: 18px;
+  }
+}
