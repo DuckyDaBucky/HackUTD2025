@@ -56,6 +56,7 @@ export default function PetStage({
           onClick={onPet}
         >
           <SpriteAnimator
+            key={src}
             src={src}
             frameWidth={frameWidth}
             frameHeight={frameHeight}
@@ -73,6 +74,7 @@ export default function PetStage({
       ) : (
         <div className={stageClassName.join(' ')} style={stageStyle}>
           <SpriteAnimator
+            key={src}
             src={src}
             frameWidth={frameWidth}
             frameHeight={frameHeight}

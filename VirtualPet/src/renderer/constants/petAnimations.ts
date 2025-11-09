@@ -7,6 +7,7 @@ import surprised from '../../../assets/CatPackPaid/Sprites/Classical/Individual/
 import sad from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Sad.png';
 import waiting from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Waiting.png';
 import layDown from '../../../assets/CatPackPaid/Sprites/Classical/Individual/LayDown.png';
+import shy from '../../../assets/CatPackPaid/Sprites/Classical/Individual/shy.png';
 
 export type PetAnimationDefinition = {
   state: string;
@@ -26,6 +27,7 @@ export const petAnimations: PetAnimationDefinition[] = [
   { state: 'sad', animationSrc: sad, fps: 6 },
   { state: 'waiting', animationSrc: waiting, fps: 7 },
   { state: 'laydown', animationSrc: layDown, fps: 12 },
+  { state: 'shy', animationSrc: shy, fps: 13 },
 ];
 
 export function getPetAnimation(state: string): PetAnimationDefinition {

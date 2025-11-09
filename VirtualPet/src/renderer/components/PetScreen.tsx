@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import roomBackdrop from '../../../assets/CatRoomPaid/Rooms/Room3.png';
+import roomBackdrop from '../../../assets/CatRoomPaid/ExampleRooms/ExampleRoom 2.png';
 import ContextPanel, { type ContextOption } from './ContextPanel';
 import PetStage from './PetStage';
 import { usePetAnimation } from '../hooks/usePetAnimation';
@@ -77,7 +77,7 @@ export default function PetScreen() {
   ];
 
   const displayMessage = isPetting
-    ? 'A happy purr rumbles after that pet!'
+    ? 'The pet looks a bit shy but loves the attention!'
     : currentSet.message;
 
   const handlePet = () => {
@@ -85,12 +85,12 @@ export default function PetScreen() {
       clearTimeout(revertTimerRef.current);
     }
 
-    setPetOverride(getPetAnimation('laydown'));
+    setPetOverride(getPetAnimation('shy'));
 
     revertTimerRef.current = setTimeout(() => {
       setPetOverride(null);
       revertTimerRef.current = null;
-    }, 1000);
+    }, 1200);
   };
 
   useEffect(() => {
