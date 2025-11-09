@@ -47,6 +47,8 @@ const optionSets: OptionSet[] = [
   },
 ];
 
+const IDLE_VARIANTS: PetAnimationState[] = ['idle', 'idle-alt', 'waiting', 'excited'];
+
 export default function PetScreen() {
   const currentSet = optionSets[0];
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,8 +57,10 @@ export default function PetScreen() {
   const [petOverride, setPetOverride] = useState<PetAnimationDefinition | null>(
     null,
   );
-
   const remoteMood = cat?.mood ?? DEFAULT_PET_STATE;
+  const idleVariantRef = useRef<PetAnimationState>('idle');
+  const idleResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const activeAnimation = useMemo(
     () => getPetAnimation(remoteMood),
     [remoteMood],
@@ -136,8 +140,47 @@ export default function PetScreen() {
         revertTimerRef.current = null;
         setPetOverride(null);
       }
+      if (idleResetRef.current) {
+        clearTimeout(idleResetRef.current);
+        idleResetRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (remoteMood !== 'idle') {
+      return;
+    }
+
+    const options = IDLE_VARIANTS.filter((variant) => variant !== idleVariantRef.current);
+    const nextVariant = options.length
+      ? options[Math.floor(Math.random() * options.length)]
+      : idleVariantRef.current;
+    idleVariantRef.current = nextVariant;
+    updateCat({ mood: nextVariant });
+  }, [remoteMood, updateCat]);
+
+  useEffect(() => {
+    if (!IDLE_VARIANTS.includes(remoteMood) || remoteMood === 'idle') {
+      return;
+    }
+
+    if (idleResetRef.current) {
+      clearTimeout(idleResetRef.current);
+    }
+
+    idleResetRef.current = setTimeout(() => {
+      updateCat({ mood: 'idle' });
+      idleResetRef.current = null;
+    }, 6000);
+
+    return () => {
+      if (idleResetRef.current) {
+        clearTimeout(idleResetRef.current);
+        idleResetRef.current = null;
+      }
+    };
+  }, [remoteMood, updateCat]);
 
   const roomBackdrop = isSleeping ? baseRoomBackdrop : baseRoomBackdrop;
   const shellClassName = ['pet-shell'];

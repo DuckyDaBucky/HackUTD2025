@@ -13,7 +13,7 @@ type MoodState = {
 };
 
 const DEFAULT_SIZE = 224;
-const DEFAULT_INTERVAL_MS = 20000;
+const DEFAULT_INTERVAL_MS = 20000; // mood interval in milliseconds
 
 const captureConstraints: MediaStreamConstraints = {
   video: {

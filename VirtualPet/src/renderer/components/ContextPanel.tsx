@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef } from 'react';
 import useMoodDetection from '../hooks/useMoodDetection';
 import { useRealtimeState } from '../state/realtimeState';
+import { useTipOfTheDay } from '../hooks/useTipOfTheDay';
 import StudyTimerPanel from './StudyTimerPanel';
 export type ContextPanelProps = {
   message: string;
@@ -30,6 +31,27 @@ const formatDuration = (ms?: number) => {
   return `${totalSeconds}s`;
 };
 
+const tipCardStyle: CSSProperties = {
+  backgroundColor: '#0C142C',
+  borderRadius: 16,
+  padding: '12px 16px',
+  border: '1px solid rgba(148, 163, 184, 0.12)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+};
+
+const tipTitleStyle: CSSProperties = {
+  fontSize: 12,
+  textTransform: 'uppercase',
+  color: '#CBD5F5',
+};
+
+const tipBodyStyle: CSSProperties = {
+  color: '#E5E7EB',
+  lineHeight: 1.4,
+};
+
 export default function ContextPanel({
   message,
   onTimerStart,
@@ -37,8 +59,8 @@ export default function ContextPanel({
   onTimerReset,
 }: ContextPanelProps) {
   const mood = useMoodDetection();
-  const { updateStats } = useRealtimeState();
-  const lastSentAtRef = useRef<number | null>(null);
+  const { stats, preferences, updateStats } = useRealtimeState();
+  const lastDetectionTimestampRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (mood.status !== 'ready' || !mood.top) {
@@ -49,11 +71,11 @@ export default function ContextPanel({
     const roundedScore = Number((mood.top.score ?? 0).toFixed(3));
     const detectionTimestamp = mood.updatedAt ?? Date.now();
 
-    if (lastSentAtRef.current === detectionTimestamp) {
+    if (lastDetectionTimestampRef.current === detectionTimestamp) {
       return;
     }
 
-    lastSentAtRef.current = detectionTimestamp;
+    lastDetectionTimestampRef.current = detectionTimestamp;
 
     updateStats({
       mood: normalized,
@@ -61,6 +83,29 @@ export default function ContextPanel({
       confidence: roundedScore,
     });
   }, [mood, updateStats]);
+
+  const tipContext = useMemo(() => {
+    if (!stats) {
+      return null;
+    }
+
+    const moodLabel = mood.top?.label ?? stats.mood ?? 'balanced';
+    return {
+      mood: moodLabel,
+      confidence: mood.top?.score ?? stats.confidence,
+      roomTemperature: stats.roomTemperature,
+      noise: stats.noisePollution,
+      focus: stats.focusLevel,
+      timerMethod: preferences?.timerMethod,
+      isStudent: preferences?.isStudent,
+    };
+  }, [mood.top, preferences?.isStudent, preferences?.timerMethod, stats]);
+
+  const {
+    tip: dailyTip,
+    status: tipStatus,
+    error: tipError,
+  } = useTipOfTheDay(tipContext);
 
   const isError = mood.status === 'error';
   const nextRunCountdown = formatDuration(mood.nextRunInMs);
@@ -104,6 +149,19 @@ export default function ContextPanel({
               {mood.status === 'ready' && mood.updatedAt
                 ? ` · Last check ${formatTime(mood.updatedAt)}`
                 : ''}
+            </span>
+          </div>
+        </div>
+
+        <div className="context-section">
+          <div className="context-tip" style={tipCardStyle}>
+            <span style={tipTitleStyle}>Tip of the day</span>
+            <span style={tipBodyStyle}>
+              {tipStatus === 'loading'
+                ? 'Crafting a quick suggestion...'
+                : (dailyTip ??
+                  tipError ??
+                  'Tips appear once enough data is collected.')}
             </span>
           </div>
         </div>

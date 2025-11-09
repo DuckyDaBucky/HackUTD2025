@@ -34,6 +34,8 @@ type UserStats = {
   mood: string;
   roomTemperature: number;
   focusLevel: number;
+  noisePollution?: number;
+  confidence: number;
   confidenceMap: Partial<Record<PetAnimationState, number>> | null;
   lastUpdated: string;
 };
@@ -55,6 +57,7 @@ type StatsUpdatePayload = Partial<{
   room_temperature: number;
   focus_level: number;
   confidence: number;
+  noise_pollution: number;
 }>;
 
 type ClientMessage =
@@ -87,6 +90,7 @@ type RealtimeContextValue = {
       roomTemperature?: number;
       focusLevel?: number;
       confidence?: number;
+      noisePollution?: number;
     }>,
   ) => void;
 };
@@ -194,6 +198,16 @@ function toUserStats(payload: any): UserStats {
       ? payload.last_updated
       : new Date().toISOString();
 
+  const noisePollution =
+    typeof payload?.noise_pollution === 'number'
+      ? payload.noise_pollution
+      : undefined;
+
+  const confidence =
+    typeof payload?.confidence === 'number'
+      ? payload.confidence
+      : confidenceMap?.[mood as PetAnimationState] ?? 0;
+
   const confidenceMap: Partial<Record<PetAnimationState, number>> | null =
     payload && typeof payload === 'object' && payload.confidence_map
       ? Object.entries(payload.confidence_map).reduce(
@@ -207,7 +221,15 @@ function toUserStats(payload: any): UserStats {
         )
       : null;
 
-  return { mood, roomTemperature, focusLevel, confidenceMap, lastUpdated };
+  return {
+    mood,
+    roomTemperature,
+    focusLevel,
+    noisePollution,
+    confidence,
+    confidenceMap,
+    lastUpdated,
+  };
 }
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
@@ -370,6 +392,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       }
       if (patch.confidence !== undefined) {
         payload.confidence = patch.confidence;
+      }
+      if (patch.noisePollution !== undefined) {
+        payload.noise_pollution = patch.noisePollution;
       }
       sendMessage({ type: 'stats:update', payload });
     },

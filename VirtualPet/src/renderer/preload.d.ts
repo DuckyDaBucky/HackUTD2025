@@ -5,6 +5,10 @@ declare global {
   interface Window {
     electron: ElectronHandler;
     emotionAPI: EmotionAPI;
+    env: {
+      GOOGLE_API_KEY?: string;
+      GEMINI_API_KEY?: string;
+    };
   }
 }
 
