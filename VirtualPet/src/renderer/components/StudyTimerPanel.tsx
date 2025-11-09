@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useStudyTimer, type TimerMode } from '../hooks/useStudyTimer';
+import { useRealtimeState } from '../state/realtimeState';
 
 const MODE_LABELS: Record<TimerMode, string> = {
   pomodoro: 'Pomodoro',
@@ -65,6 +66,14 @@ export default function StudyTimerPanel({
 }: StudyTimerPanelProps) {
   const timer = useStudyTimer();
   const isRunning = timer.status === 'running';
+  const { preferences } = useRealtimeState();
+
+  useEffect(() => {
+    const remoteMode = preferences?.timerMethod ?? 'pomodoro';
+    if (remoteMode !== timer.mode) {
+      timer.switchMode(remoteMode);
+    }
+  }, [preferences?.timerMethod, timer]);
 
   const handleStart = () => {
     if (isRunning) return;

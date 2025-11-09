@@ -14,6 +14,8 @@ import {
   type PetAnimationState,
 } from '../constants/petAnimations';
 
+type TimerMethod = 'pomodoro' | 'custom' | 'focus';
+
 type CatState = {
   mood: PetAnimationState;
   energy: number;
@@ -24,6 +26,7 @@ type CatState = {
 type UserPreferences = {
   isStudent: boolean;
   theme: string;
+  timerMethod: TimerMethod;
   lastUpdated: string;
 };
 
@@ -44,6 +47,7 @@ type CatUpdatePayload = Partial<{
 type PreferencesUpdatePayload = Partial<{
   is_student: boolean;
   theme: string;
+  timer_method: TimerMethod;
 }>;
 
 type StatsUpdatePayload = Partial<{
@@ -71,7 +75,11 @@ type RealtimeContextValue = {
   refreshAll: () => void;
   updateCat: (patch: CatUpdatePayload) => void;
   updatePreferences: (
-    patch: Partial<{ isStudent?: boolean; theme?: string }>,
+    patch: Partial<{
+      isStudent?: boolean;
+      theme?: string;
+      timerMethod?: TimerMethod;
+    }>,
   ) => void;
   updateStats: (
     patch: Partial<{
@@ -144,12 +152,17 @@ function toUserPreferences(payload: any): UserPreferences {
       ? payload.theme
       : 'light';
 
+  const timerMethod: TimerMethod =
+    payload?.timer_method === 'custom' || payload?.timer_method === 'focus'
+      ? payload.timer_method
+      : 'pomodoro';
+
   const lastUpdated =
     typeof payload?.last_updated === 'string'
       ? payload.last_updated
       : new Date().toISOString();
 
-  return { isStudent, theme, lastUpdated };
+  return { isStudent, theme, timerMethod, lastUpdated };
 }
 
 function toUserStats(payload: any): UserStats {
@@ -334,6 +347,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       }
       if (patch.theme !== undefined) {
         payload.theme = patch.theme;
+      }
+      if (patch.timerMethod !== undefined) {
+        payload.timer_method = patch.timerMethod;
       }
       sendMessage({ type: 'prefs:update', payload });
     },

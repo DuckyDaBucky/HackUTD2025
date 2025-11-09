@@ -44,6 +44,7 @@ type UserPreferencesRow = {
   id: number;
   is_student: number;
   theme: string;
+  timer_method: string;
   last_updated: string;
 };
 
@@ -149,23 +150,36 @@ db.exec(`
     id INTEGER PRIMARY KEY CHECK (id = 1),
     is_student INTEGER DEFAULT 0,
     theme TEXT DEFAULT 'light',
+    timer_method TEXT DEFAULT 'pomodoro',
     last_updated TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
 
 db.exec(`
-  INSERT OR IGNORE INTO user_preferences (id, is_student, theme, last_updated)
-  VALUES (1, 0, 'light', datetime('now'));
+  INSERT OR IGNORE INTO user_preferences (id, is_student, theme, timer_method, last_updated)
+  VALUES (1, 0, 'light', 'pomodoro', datetime('now'));
 `);
+
+const userPreferencesColumns = db
+  .prepare("PRAGMA table_info(user_preferences)")
+  .all() as { name: string }[];
+
+if (!userPreferencesColumns.some((column) => column.name === "timer_method")) {
+  db.exec(
+    "ALTER TABLE user_preferences ADD COLUMN timer_method TEXT DEFAULT 'pomodoro'"
+  );
+}
 
 export function getUserPreferences(): UserPreferencesRow {
   return db
-    .prepare("SELECT * FROM user_preferences WHERE id = 1")
+    .prepare(
+      "SELECT id, is_student, theme, COALESCE(timer_method, 'pomodoro') AS timer_method, last_updated FROM user_preferences WHERE id = 1"
+    )
     .get() as UserPreferencesRow;
 }
 
 export function updateUserPreferences(
-  patch: Partial<{ is_student: boolean; theme: string }>
+  patch: Partial<{ is_student: boolean; theme: string; timer_method: string }>
 ) {
   const current = getUserPreferences();
   const is_student =
@@ -175,14 +189,15 @@ export function updateUserPreferences(
         : 0
       : current.is_student;
   const theme = patch.theme ?? current.theme;
+  const timer_method = patch.timer_method ?? current.timer_method;
 
   db.prepare(
     `
     UPDATE user_preferences
-    SET is_student = ?, theme = ?, last_updated = datetime('now')
+    SET is_student = ?, theme = ?, timer_method = ?, last_updated = datetime('now')
     WHERE id = 1
   `
-  ).run(is_student, theme);
+  ).run(is_student, theme, timer_method);
 
   return getUserPreferences();
 }

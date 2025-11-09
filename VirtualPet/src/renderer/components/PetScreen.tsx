@@ -50,6 +50,7 @@ const optionSets: OptionSet[] = [
 export default function PetScreen() {
   const currentSet = optionSets[0];
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousMoodRef = useRef<PetAnimationState | null>(null);
   const { cat, updateCat, status } = useRealtimeState();
   const [petOverride, setPetOverride] = useState<PetAnimationDefinition | null>(
     null,
@@ -98,11 +99,17 @@ export default function PetScreen() {
       clearTimeout(revertTimerRef.current);
     }
 
+    previousMoodRef.current = remoteMood;
+
+    updateCat({ mood: 'shy' });
     setPetOverride(getPetAnimation('shy'));
 
     revertTimerRef.current = setTimeout(() => {
       setPetOverride(null);
       revertTimerRef.current = null;
+      const fallbackMood = previousMoodRef.current ?? DEFAULT_PET_STATE;
+      updateCat({ mood: fallbackMood });
+      previousMoodRef.current = null;
     }, 1200);
   };
 

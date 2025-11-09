@@ -1,7 +1,13 @@
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, Text, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useRealtimeState } from '@/state/realtimeState';
+
+const TIMER_METHOD_OPTIONS = [
+  { id: 'pomodoro', label: 'Pomodoro' },
+  { id: 'custom', label: 'Custom' },
+  { id: 'focus', label: 'Focus' },
+] as const;
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -10,6 +16,7 @@ export default function SettingsScreen() {
   const isStudent = preferences?.isStudent ?? false;
   const isDark = (preferences?.theme ?? 'light') === 'dark';
   const reduceMotion = stats?.focusLevel !== undefined ? stats.focusLevel < 4 : false;
+  const timerMethod = preferences?.timerMethod ?? 'pomodoro';
 
   return (
     <ScrollView
@@ -63,6 +70,29 @@ export default function SettingsScreen() {
           />
         </View>
       </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Study Timer Method</Text>
+        <Text style={styles.sectionHelper}>Choose how the timer behaves across devices.</Text>
+        <View style={styles.methodRow}>
+          {TIMER_METHOD_OPTIONS.map((option) => {
+            const selected = option.id === timerMethod;
+            return (
+              <Pressable
+                key={option.id}
+                onPress={() => updatePreferences({ timerMethod: option.id })}
+                style={[styles.methodButton, selected && styles.methodButtonActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.methodButtonText, selected && styles.methodButtonTextActive]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -100,6 +130,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  sectionHelper: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    lineHeight: 18,
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -119,5 +154,31 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 12,
     lineHeight: 18,
+  },
+  methodRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  methodButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.2)',
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+  },
+  methodButtonActive: {
+    backgroundColor: '#1E3A8A',
+    borderColor: '#3B82F6',
+  },
+  methodButtonText: {
+    color: '#E5E7EB',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  methodButtonTextActive: {
+    color: '#FFFFFF',
   },
 });

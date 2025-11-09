@@ -58,6 +58,12 @@ export default function HomeScreen() {
   const { status, cat, stats, error } = useRealtimeState();
   const activeMood = cat?.mood ?? DEFAULT_PET_STATE;
   const { animation } = usePetAnimation(activeMood);
+  const idleVariants: PetAnimationState[] = [
+    "idle",
+    "idle-alt",
+    "waiting",
+    "excited",
+  ];
 
   const frameCount = useMemo(
     () => animation.sheet.frames.length || 1,
@@ -78,6 +84,16 @@ export default function HomeScreen() {
 
     return () => clearInterval(interval);
   }, [animation, frameCount]);
+
+  useEffect(() => {
+    if (activeMood === "idle") {
+      const variant =
+        idleVariants[Math.floor(Math.random() * idleVariants.length)];
+      if (variant !== activeMood) {
+        setFrameIndex(0);
+      }
+    }
+  }, [activeMood, idleVariants]);
 
   const detectionMood = stats?.mood ?? activeMood;
   const detectionMoodKey: PetAnimationState = CONFIDENCE_KEYS.has(
