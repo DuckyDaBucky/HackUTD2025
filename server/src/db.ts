@@ -13,6 +13,7 @@ const CAT_ANIMATION_STATES = [
   "waiting",
   "laydown",
   "shy",
+  "dance",
   "sleeping",
   "sleeping-alt",
 ] as const;
@@ -53,7 +54,23 @@ type UserStatsRow = {
   mood: string;
   room_temperature: number;
   focus_level: number;
+  confidence: number;
+  noise_pollution: number;
+  music_is_playing: number;
+  music_track: string | null;
+  daily_tip: string | null;
+  tip_generated_at: string | null;
   last_updated: string;
+};
+
+type SpotifyTokenRow = {
+  id: number;
+  access_token: string | null;
+  refresh_token: string | null;
+  expires_at: number | null;
+  token_type: string | null;
+  scope: string | null;
+  updated_at: string;
 };
 
 const dataDir = path.join(process.cwd(), "data");
@@ -210,6 +227,12 @@ db.exec(`
     mood TEXT DEFAULT 'ok',
     room_temperature REAL DEFAULT 22.0,
     focus_level INTEGER DEFAULT 5,
+    confidence REAL DEFAULT 0,
+    noise_pollution REAL DEFAULT 0,
+    music_is_playing INTEGER DEFAULT 0,
+    music_track TEXT,
+    daily_tip TEXT,
+    tip_generated_at TEXT,
     last_updated TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
@@ -223,6 +246,20 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS spotify_tokens (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token TEXT,
+    refresh_token TEXT,
+    expires_at INTEGER,
+    token_type TEXT,
+    scope TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+db.exec(`INSERT OR IGNORE INTO spotify_tokens (id) VALUES (1);`);
+
 const ensureConfidenceRow = db.prepare(
   `INSERT OR IGNORE INTO mood_confidence (mood, confidence) VALUES (?, 0)`
 );
@@ -233,9 +270,53 @@ db.exec(`
   VALUES (1, 'ok', 22.0, 5, datetime('now'));
 `);
 
+const userStatsColumns = db.prepare("PRAGMA table_info(user_stats)").all() as {
+  name: string;
+}[];
+
+if (!userStatsColumns.some((column) => column.name === "confidence")) {
+  db.exec("ALTER TABLE user_stats ADD COLUMN confidence REAL DEFAULT 0");
+}
+
+if (!userStatsColumns.some((column) => column.name === "noise_pollution")) {
+  db.exec("ALTER TABLE user_stats ADD COLUMN noise_pollution REAL DEFAULT 0");
+}
+
+if (!userStatsColumns.some((column) => column.name === "daily_tip")) {
+  db.exec("ALTER TABLE user_stats ADD COLUMN daily_tip TEXT");
+}
+
+if (!userStatsColumns.some((column) => column.name === "tip_generated_at")) {
+  db.exec("ALTER TABLE user_stats ADD COLUMN tip_generated_at TEXT");
+}
+
+if (!userStatsColumns.some((column) => column.name === "music_is_playing")) {
+  db.exec(
+    "ALTER TABLE user_stats ADD COLUMN music_is_playing INTEGER DEFAULT 0"
+  );
+}
+
+if (!userStatsColumns.some((column) => column.name === "music_track")) {
+  db.exec("ALTER TABLE user_stats ADD COLUMN music_track TEXT");
+}
+
 export function getUserStats(): UserStatsRow {
   return db
-    .prepare("SELECT * FROM user_stats WHERE id = 1")
+    .prepare(
+      `SELECT id,
+              mood,
+              room_temperature,
+              focus_level,
+              COALESCE(confidence, 0) AS confidence,
+              COALESCE(noise_pollution, 0) AS noise_pollution,
+              COALESCE(music_is_playing, 0) AS music_is_playing,
+              music_track,
+              daily_tip,
+              tip_generated_at,
+              last_updated
+       FROM user_stats
+       WHERE id = 1`
+    )
     .get() as UserStatsRow;
 }
 
@@ -274,24 +355,150 @@ export function updateUserStats(
     room_temperature: number;
     focus_level: number;
     confidence: number;
+    noise_pollution: number;
+    music_is_playing: number;
+    music_track: string | null;
   }>
 ) {
   const current = getUserStats();
   const mood = patch.mood ?? current.mood;
   const room_temperature = patch.room_temperature ?? current.room_temperature;
   const focus_level = patch.focus_level ?? current.focus_level;
+  const confidence =
+    patch.confidence !== undefined ? patch.confidence : current.confidence;
+  const noise_pollution =
+    patch.noise_pollution !== undefined
+      ? patch.noise_pollution
+      : current.noise_pollution;
+  const music_is_playing =
+    patch.music_is_playing !== undefined
+      ? patch.music_is_playing
+      : current.music_is_playing ?? 0;
+  const music_track =
+    patch.music_track !== undefined ? patch.music_track : current.music_track;
 
   db.prepare(
     `
     UPDATE user_stats
-    SET mood = ?, room_temperature = ?, focus_level = ?, last_updated = datetime('now')
+    SET mood = ?, room_temperature = ?, focus_level = ?, confidence = ?, noise_pollution = ?, music_is_playing = ?, music_track = ?, last_updated = datetime('now')
     WHERE id = 1
   `
-  ).run(mood, room_temperature, focus_level);
+  ).run(
+    mood,
+    room_temperature,
+    focus_level,
+    confidence,
+    noise_pollution,
+    music_is_playing,
+    music_track
+  );
 
-  if (patch.confidence !== undefined && isCatAnimationState(patch.mood)) {
+  if (
+    patch.confidence !== undefined &&
+    patch.mood &&
+    isCatAnimationState(patch.mood)
+  ) {
     updateMoodConfidence(patch.mood, patch.confidence);
   }
 
   return getUserStats();
+}
+
+export function setDailyTip(tip: string, generatedAt: string) {
+  db.prepare(
+    `
+    UPDATE user_stats
+    SET daily_tip = ?, tip_generated_at = ?
+    WHERE id = 1
+  `
+  ).run(tip, generatedAt);
+}
+
+export function setMusicPlayback(
+  isPlaying: boolean,
+  track: string | null
+): UserStatsRow {
+  db.prepare(
+    `
+    UPDATE user_stats
+    SET music_is_playing = ?, music_track = ?, last_updated = datetime('now')
+    WHERE id = 1
+  `
+  ).run(isPlaying ? 1 : 0, track ?? null);
+
+  return getUserStats();
+}
+
+export function getSpotifyTokens(): SpotifyTokenRow {
+  return db
+    .prepare(
+      `SELECT id,
+              access_token,
+              refresh_token,
+              expires_at,
+              token_type,
+              scope,
+              updated_at
+       FROM spotify_tokens
+       WHERE id = 1`
+    )
+    .get() as SpotifyTokenRow;
+}
+
+type SpotifyTokenUpdate = {
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  expiresAt?: number | null;
+  tokenType?: string | null;
+  scope?: string | null;
+};
+
+export function setSpotifyTokens(update: SpotifyTokenUpdate) {
+  const current = getSpotifyTokens();
+
+  const accessToken =
+    update.accessToken !== undefined
+      ? update.accessToken
+      : current.access_token;
+  const refreshToken =
+    update.refreshToken !== undefined
+      ? update.refreshToken
+      : current.refresh_token;
+  const expiresAt =
+    update.expiresAt !== undefined ? update.expiresAt : current.expires_at;
+  const tokenType =
+    update.tokenType !== undefined ? update.tokenType : current.token_type;
+  const scope = update.scope !== undefined ? update.scope : current.scope;
+
+  db.prepare(
+    `
+    UPDATE spotify_tokens
+    SET access_token = ?,
+        refresh_token = ?,
+        expires_at = ?,
+        token_type = ?,
+        scope = ?,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run(accessToken, refreshToken, expiresAt, tokenType, scope);
+
+  return getSpotifyTokens();
+}
+
+export function clearSpotifyTokens() {
+  db.prepare(
+    `
+    UPDATE spotify_tokens
+    SET access_token = NULL,
+        refresh_token = NULL,
+        expires_at = NULL,
+        token_type = NULL,
+        scope = NULL,
+        updated_at = datetime('now')
+    WHERE id = 1
+  `
+  ).run();
+
+  return getSpotifyTokens();
 }

@@ -39,6 +39,11 @@ type UserStats = {
   focusLevel: number;
   noisePollution?: number;
   confidence: number;
+  musicIsPlaying: boolean;
+  musicTrack?: string | null;
+  spotifyConnected: boolean;
+  dailyTip?: string | null;
+  tipGeneratedAt?: string | null;
   confidenceMap: Partial<Record<PetAnimationState, number>> | null;
   lastUpdated: string;
 };
@@ -61,6 +66,8 @@ type StatsUpdatePayload = Partial<{
   focus_level: number;
   confidence: number;
   noise_pollution: number;
+  music_is_playing: number;
+  music_track: string | null;
 }>;
 
 type ClientMessage =
@@ -78,6 +85,7 @@ type RealtimeContextValue = {
   preferences: UserPreferences | null;
   stats: UserStats | null;
   error: string | null;
+  serverUrl: string;
   refreshAll: () => void;
   updateCat: (patch: CatUpdatePayload) => void;
   updatePreferences: (
@@ -94,6 +102,8 @@ type RealtimeContextValue = {
       focusLevel?: number;
       confidence?: number;
       noisePollution?: number;
+      musicIsPlaying?: boolean;
+      musicTrack?: string | null;
     }>
   ) => void;
 };
@@ -131,6 +141,9 @@ function resolveDefaultWsUrl(): string {
 }
 
 const DEFAULT_WS_URL = resolveDefaultWsUrl();
+const DEFAULT_HTTP_URL = DEFAULT_WS_URL.startsWith("wss://")
+  ? DEFAULT_WS_URL.replace(/^wss:\/\//, "https://")
+  : DEFAULT_WS_URL.replace(/^ws:\/\//, "http://");
 
 function logWs(message: string, ...rest: unknown[]) {
   if (__DEV__) {
@@ -225,12 +238,53 @@ function toUserStats(payload: any): UserStats {
   const noisePollution =
     typeof payload?.noise_pollution === "number" ? payload.noise_pollution : undefined;
 
+  const musicIsPlayingRaw = payload?.music_is_playing ?? payload?.musicIsPlaying;
+  const musicIsPlaying =
+    musicIsPlayingRaw === 1 ||
+    musicIsPlayingRaw === true ||
+    musicIsPlayingRaw === "1";
+
+  const musicTrack =
+    typeof payload?.music_track === "string" && payload.music_track.length > 0
+      ? payload.music_track
+      : typeof payload?.musicTrack === "string" && payload.musicTrack.length > 0
+      ? payload.musicTrack
+      : null;
+
   const confidence =
     typeof payload?.confidence === "number"
       ? payload.confidence
       : confidenceMap?.[mood as PetAnimationState] ?? 0;
 
-  return { mood, roomTemperature, focusLevel, noisePollution, confidence, confidenceMap, lastUpdated };
+  const spotifyConnected =
+    payload?.spotify_connected === true ||
+    payload?.spotify_connected === 1 ||
+    payload?.spotify_connected === "1";
+
+  const dailyTip =
+    typeof payload?.daily_tip === "string" && payload.daily_tip.length > 0
+      ? payload.daily_tip
+      : null;
+
+  const tipGeneratedAt =
+    typeof payload?.tip_generated_at === "string"
+      ? payload.tip_generated_at
+      : null;
+
+  return {
+    mood,
+    roomTemperature,
+    focusLevel,
+    noisePollution,
+    confidence,
+    musicIsPlaying,
+    musicTrack,
+    spotifyConnected,
+    dailyTip,
+    tipGeneratedAt,
+    confidenceMap,
+    lastUpdated,
+  };
 }
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
@@ -417,6 +471,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       if (patch.noisePollution !== undefined) {
         payload.noise_pollution = patch.noisePollution;
       }
+      if (patch.musicIsPlaying !== undefined) {
+        payload.music_is_playing = patch.musicIsPlaying ? 1 : 0;
+      }
+      if (patch.musicTrack !== undefined) {
+        payload.music_track = patch.musicTrack ?? null;
+      }
       sendMessage({ type: "stats:update", payload });
     },
     [sendMessage],
@@ -429,6 +489,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       preferences,
       stats,
       error,
+      serverUrl: DEFAULT_HTTP_URL.replace(/\/$/, ""),
       refreshAll,
       updateCat,
       updatePreferences,

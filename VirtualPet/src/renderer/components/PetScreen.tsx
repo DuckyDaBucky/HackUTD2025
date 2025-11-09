@@ -53,7 +53,7 @@ export default function PetScreen() {
   const currentSet = optionSets[0];
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousMoodRef = useRef<PetAnimationState | null>(null);
-  const { cat, updateCat, status } = useRealtimeState();
+  const { cat, updateCat, status, stats } = useRealtimeState();
   const [petOverride, setPetOverride] = useState<PetAnimationDefinition | null>(
     null,
   );
@@ -65,11 +65,17 @@ export default function PetScreen() {
     () => getPetAnimation(remoteMood),
     [remoteMood],
   );
-  const isSleeping = ['sleep', 'sleeping', 'sleeping-alt'].includes(remoteMood);
+  const isMusicPlaying = stats?.musicIsPlaying ?? false;
+  const currentTrack = stats?.musicTrack ?? null;
+  const isSleeping =
+    !isMusicPlaying &&
+    ['sleep', 'sleeping', 'sleeping-alt'].includes(remoteMood);
 
   const isPetting = petOverride !== null;
 
-  const displayedAnimation = petOverride ?? activeAnimation;
+  const displayedAnimation = isMusicPlaying
+    ? getPetAnimation('dance')
+    : petOverride ?? activeAnimation;
 
   const sprite = {
     src: displayedAnimation.animationSrc,
@@ -83,6 +89,13 @@ export default function PetScreen() {
   const displayMessage = (() => {
     if (status !== 'connected') {
       return 'Connecting to your study buddy...';
+    }
+
+    if (isMusicPlaying) {
+      if (currentTrack) {
+        return `Vibing to ${currentTrack}.`;
+      }
+      return 'Grooving to your playlist.';
     }
 
     if (isPetting) {
@@ -148,7 +161,7 @@ export default function PetScreen() {
   }, []);
 
   useEffect(() => {
-    if (remoteMood !== 'idle') {
+    if (isMusicPlaying || remoteMood !== 'idle') {
       return;
     }
 
@@ -158,10 +171,14 @@ export default function PetScreen() {
       : idleVariantRef.current;
     idleVariantRef.current = nextVariant;
     updateCat({ mood: nextVariant });
-  }, [remoteMood, updateCat]);
+  }, [remoteMood, updateCat, isMusicPlaying]);
 
   useEffect(() => {
-    if (!IDLE_VARIANTS.includes(remoteMood) || remoteMood === 'idle') {
+    if (
+      isMusicPlaying ||
+      !IDLE_VARIANTS.includes(remoteMood) ||
+      remoteMood === 'idle'
+    ) {
       return;
     }
 
@@ -180,7 +197,7 @@ export default function PetScreen() {
         idleResetRef.current = null;
       }
     };
-  }, [remoteMood, updateCat]);
+  }, [remoteMood, updateCat, isMusicPlaying]);
 
   const roomBackdrop = isSleeping ? baseRoomBackdrop : baseRoomBackdrop;
   const shellClassName = ['pet-shell'];

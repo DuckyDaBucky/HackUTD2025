@@ -85,6 +85,13 @@ const sprites = [
     output: path.join(projectRoot, 'kori/assets/sprites/generated/shy.ts'),
   },
   {
+    name: 'dance',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_dance.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/dance.ts'),
+  },
+  {
     name: 'sleepingAlt',
     input: path.join(projectRoot, 'kori/assets/sprites/source/cat_sleeping.png'),
     frameWidth: 48,

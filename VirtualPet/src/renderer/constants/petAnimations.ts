@@ -8,6 +8,7 @@ import sad from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Sad.pn
 import waiting from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Waiting.png';
 import layDown from '../../../assets/CatPackPaid/Sprites/Classical/Individual/LayDown.png';
 import shy from '../../../assets/CatPackPaid/Sprites/Classical/Individual/shy.png';
+import dance from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Dance.png';
 import catSleeping from '../../../assets/CatRoomPaid/CatSleeping.png';
 
 export const petAnimations = [
@@ -21,6 +22,7 @@ export const petAnimations = [
   { state: 'waiting', animationSrc: waiting, fps: 7 },
   { state: 'laydown', animationSrc: layDown, fps: 12 },
   { state: 'shy', animationSrc: shy, fps: 10 },
+  { state: 'dance', animationSrc: dance, fps: 12 },
   { state: 'sleeping', animationSrc: sleep, fps: 6 },
   { state: 'sleeping-alt', animationSrc: catSleeping, fps: 4 },
 ] as const;

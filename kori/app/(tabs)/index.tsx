@@ -57,7 +57,11 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { status, cat, stats, error } = useRealtimeState();
   const activeMood = cat?.mood ?? DEFAULT_PET_STATE;
-  const { animation } = usePetAnimation(activeMood);
+  const musicIsPlaying = stats?.musicIsPlaying ?? false;
+  const currentTrack = stats?.musicTrack ?? null;
+  const effectiveMood: PetAnimationState = musicIsPlaying ? "dance" : activeMood;
+
+  const { animation } = usePetAnimation(effectiveMood);
   const frameCount = useMemo(
     () => animation.sheet.frames.length || 1,
     [animation]
@@ -163,9 +167,16 @@ export default function HomeScreen() {
               <Text style={styles.cardTitle}>Cat Habitat</Text>
               <View style={styles.pill}>
                 <Text style={styles.pillText}>
-                  {toTitleCase(activeMood).toUpperCase()}
+                  {toTitleCase(animation.state).toUpperCase()}
                 </Text>
               </View>
+              {musicIsPlaying ? (
+                <Text style={styles.musicLabel}>
+                  {currentTrack
+                    ? `Now playing: ${currentTrack}`
+                    : "Listening to your music"}
+                </Text>
+              ) : null}
             </View>
             <View style={styles.spriteShell}>
               <Sprite
@@ -273,6 +284,12 @@ const styles = StyleSheet.create({
     color: "#7DD3FC",
     fontSize: 12,
     letterSpacing: 1,
+  },
+  musicLabel: {
+    color: "#A5B4FC",
+    fontSize: 12,
+    marginTop: 6,
+    maxWidth: 220,
   },
   spriteShell: {
     width: 112,

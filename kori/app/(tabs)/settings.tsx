@@ -1,5 +1,7 @@
+import { useCallback } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
 
 import { useRealtimeState } from '@/state/realtimeState';
 
@@ -11,12 +13,23 @@ const TIMER_METHOD_OPTIONS = [
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { preferences, updatePreferences, stats, updateStats } = useRealtimeState();
+  const { preferences, updatePreferences, stats, updateStats, serverUrl } = useRealtimeState();
 
   const isStudent = preferences?.isStudent ?? false;
   const isDark = (preferences?.theme ?? 'light') === 'dark';
   const reduceMotion = stats?.focusLevel !== undefined ? stats.focusLevel < 4 : false;
   const timerMethod = preferences?.timerMethod ?? 'pomodoro';
+  const spotifyConnected = stats?.spotifyConnected ?? false;
+
+  const baseServerUrl = serverUrl.endsWith('/') ? serverUrl.slice(0, -1) : serverUrl;
+
+  const handleConnectSpotify = useCallback(() => {
+    if (spotifyConnected) {
+      return;
+    }
+    const target = `${baseServerUrl}/auth/spotify/login`;
+    void WebBrowser.openBrowserAsync(target);
+  }, [baseServerUrl, spotifyConnected]);
 
   return (
     <ScrollView
@@ -52,6 +65,32 @@ export default function SettingsScreen() {
             thumbColor={isDark ? '#FDE68A' : '#1F2937'}
             trackColor={{ false: '#111827', true: '#92400E' }}
           />
+        </View>
+        <View style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowLabel}>Spotify link</Text>
+            <Text style={styles.rowHelper}>
+              Let your companion dance whenever Spotify is playing.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleConnectSpotify}
+            disabled={spotifyConnected}
+            style={[
+              styles.spotifyButton,
+              spotifyConnected && styles.spotifyButtonConnected,
+            ]}
+          >
+            <Text
+              style={[
+                styles.spotifyButtonText,
+                spotifyConnected && styles.spotifyButtonTextConnected,
+              ]}
+            >
+              {spotifyConnected ? 'Connected' : 'Connect'}
+            </Text>
+          </Pressable>
         </View>
       </View>
 
@@ -180,5 +219,25 @@ const styles = StyleSheet.create({
   },
   methodButtonTextActive: {
     color: '#FFFFFF',
+  },
+  spotifyButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    backgroundColor: '#4C1D95',
+    borderWidth: 1,
+    borderColor: '#7C3AED',
+  },
+  spotifyButtonConnected: {
+    backgroundColor: 'rgba(124, 58, 237, 0.2)',
+    borderColor: 'rgba(124, 58, 237, 0.3)',
+  },
+  spotifyButtonText: {
+    color: '#F9FAFB',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  spotifyButtonTextConnected: {
+    color: '#C4B5FD',
   },
 });

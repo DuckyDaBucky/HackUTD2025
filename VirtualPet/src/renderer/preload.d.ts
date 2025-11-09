@@ -8,6 +8,7 @@ declare global {
     env: {
       GOOGLE_API_KEY?: string;
       GEMINI_API_KEY?: string;
+      GEMINI_MODEL?: string;
     };
   }
 }

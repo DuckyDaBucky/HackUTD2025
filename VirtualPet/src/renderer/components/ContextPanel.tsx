@@ -1,7 +1,6 @@
 import { type CSSProperties, useEffect, useMemo, useRef } from 'react';
 import useMoodDetection from '../hooks/useMoodDetection';
 import { useRealtimeState } from '../state/realtimeState';
-import { useTipOfTheDay } from '../hooks/useTipOfTheDay';
 import StudyTimerPanel from './StudyTimerPanel';
 export type ContextPanelProps = {
   message: string;
@@ -59,7 +58,7 @@ export default function ContextPanel({
   onTimerReset,
 }: ContextPanelProps) {
   const mood = useMoodDetection();
-  const { stats, preferences, updateStats } = useRealtimeState();
+  const { stats, updateStats } = useRealtimeState();
   const lastDetectionTimestampRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -84,28 +83,15 @@ export default function ContextPanel({
     });
   }, [mood, updateStats]);
 
-  const tipContext = useMemo(() => {
+  const tipText = useMemo(() => {
     if (!stats) {
-      return null;
+      return 'Tips appear once enough data is collected.';
     }
-
-    const moodLabel = mood.top?.label ?? stats.mood ?? 'balanced';
-    return {
-      mood: moodLabel,
-      confidence: mood.top?.score ?? stats.confidence,
-      roomTemperature: stats.roomTemperature,
-      noise: stats.noisePollution,
-      focus: stats.focusLevel,
-      timerMethod: preferences?.timerMethod,
-      isStudent: preferences?.isStudent,
-    };
-  }, [mood.top, preferences?.isStudent, preferences?.timerMethod, stats]);
-
-  const {
-    tip: dailyTip,
-    status: tipStatus,
-    error: tipError,
-  } = useTipOfTheDay(tipContext);
+    if (stats.dailyTip && stats.dailyTip.trim().length > 0) {
+      return stats.dailyTip.trim();
+    }
+    return 'We will share focused advice as soon as fresh mood data arrives.';
+  }, [stats]);
 
   const isError = mood.status === 'error';
   const nextRunCountdown = formatDuration(mood.nextRunInMs);
@@ -156,13 +142,7 @@ export default function ContextPanel({
         <div className="context-section">
           <div className="context-tip" style={tipCardStyle}>
             <span style={tipTitleStyle}>Tip of the day</span>
-            <span style={tipBodyStyle}>
-              {tipStatus === 'loading'
-                ? 'Crafting a quick suggestion...'
-                : (dailyTip ??
-                  tipError ??
-                  'Tips appear once enough data is collected.')}
-            </span>
+            <span style={tipBodyStyle}>{tipText}</span>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { sad } from '@/assets/sprites/generated/sad';
 import { waiting } from '@/assets/sprites/generated/waiting';
 import { layDown } from '@/assets/sprites/generated/layDown';
 import { shy } from '@/assets/sprites/generated/shy';
+import { dance } from '@/assets/sprites/generated/dance';
 import { sleepingAlt } from '@/assets/sprites/generated/sleepingAlt';
 import type { SpriteSheetData } from '@/components/SpriteTypes';
 
@@ -22,6 +23,7 @@ export type PetAnimationState =
   | 'waiting'
   | 'laydown'
   | 'shy'
+  | 'dance'
   | 'sleeping'
   | 'sleeping-alt';
 
@@ -42,6 +44,7 @@ export const petAnimations: readonly PetAnimationDefinition[] = [
   { state: 'waiting', sheet: waiting, fps: 7 },
   { state: 'laydown', sheet: layDown, fps: 12 },
   { state: 'shy', sheet: shy, fps: 10 },
+  { state: 'dance', sheet: dance, fps: 12 },
   { state: 'sleeping', sheet: sleep, fps: 6 },
   { state: 'sleeping-alt', sheet: sleepingAlt, fps: 4 },
 ] as const;
