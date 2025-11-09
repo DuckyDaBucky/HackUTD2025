@@ -6,6 +6,7 @@ import excited from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Ex
 import surprised from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Surprised.png';
 import sad from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Sad.png';
 import waiting from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Waiting.png';
+import layDown from '../../../assets/CatPackPaid/Sprites/Classical/Individual/LayDown.png';
 
 export type PetAnimationDefinition = {
   state: string;
@@ -24,8 +25,11 @@ export const petAnimations: PetAnimationDefinition[] = [
   { state: 'surprised', animationSrc: surprised, fps: 9 },
   { state: 'sad', animationSrc: sad, fps: 6 },
   { state: 'waiting', animationSrc: waiting, fps: 7 },
+  { state: 'laydown', animationSrc: layDown, fps: 12 },
 ];
 
 export function getPetAnimation(state: string): PetAnimationDefinition {
-  return petAnimations.find((entry) => entry.state === state) ?? petAnimations[0];
+  return (
+    petAnimations.find((entry) => entry.state === state) ?? petAnimations[0]
+  );
 }

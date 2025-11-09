@@ -1,8 +1,12 @@
+import { useEffect, useRef, useState } from 'react';
 import roomBackdrop from '../../../assets/CatRoomPaid/Rooms/Room3.png';
 import ContextPanel, { type ContextOption } from './ContextPanel';
-import HardwareStrip from './HardwareStrip';
 import PetStage from './PetStage';
 import { usePetAnimation } from '../hooks/usePetAnimation';
+import {
+  getPetAnimation,
+  type PetAnimationDefinition,
+} from '../constants/petAnimations';
 
 type OptionTemplate = {
   label: string;
@@ -41,14 +45,22 @@ const optionSets: OptionSet[] = [
 
 export default function PetScreen() {
   const currentSet = optionSets[0];
+  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { animation: activeAnimation, togglePetAnimation } = usePetAnimation();
+  const [petOverride, setPetOverride] = useState<PetAnimationDefinition | null>(
+    null,
+  );
+  const isPetting = petOverride !== null;
+
+  const displayedAnimation = petOverride ?? activeAnimation;
+
   const sprite = {
-    src: activeAnimation.animationSrc,
+    src: displayedAnimation.animationSrc,
     frameWidth: 32,
     frameHeight: 32,
-    fps: activeAnimation.fps ?? 8,
+    fps: displayedAnimation.fps ?? 8,
     scale: 7,
-    alt: `Pet is ${activeAnimation.state.replace('-', ' ')}`,
+    alt: `Pet is ${displayedAnimation.state.replace('-', ' ')}`,
   } as const;
 
   const contextOptions: [ContextOption, ContextOption] = [
@@ -64,16 +76,46 @@ export default function PetScreen() {
     },
   ];
 
+  const displayMessage = isPetting
+    ? 'A happy purr rumbles after that pet!'
+    : currentSet.message;
+
+  const handlePet = () => {
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+    }
+
+    setPetOverride(getPetAnimation('laydown'));
+
+    revertTimerRef.current = setTimeout(() => {
+      setPetOverride(null);
+      revertTimerRef.current = null;
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (revertTimerRef.current) {
+        clearTimeout(revertTimerRef.current);
+        revertTimerRef.current = null;
+        setPetOverride(null);
+      }
+    };
+  }, []);
+
   return (
     <div className="app-root">
       <div className="pet-shell">
         <main className="pet-layout">
-          <PetStage sprite={sprite} backgroundSrc={roomBackdrop} />
+          <PetStage
+            sprite={sprite}
+            backgroundSrc={roomBackdrop}
+            onPet={handlePet}
+            isPetting={isPetting}
+          />
 
-          <ContextPanel message={currentSet.message} options={contextOptions} />
+          <ContextPanel message={displayMessage} options={contextOptions} />
         </main>
-
-        <HardwareStrip />
       </div>
     </div>
   );
