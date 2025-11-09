@@ -1,125 +1,187 @@
-import { StyleSheet, View, Image, Text, ScrollView, TouchableOpacity } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
+import {
+  Animated,
+  Easing,
+  ImageBackground,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import SpriteAnimator from '@/components/SpriteAnimator';
+import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { useState } from 'react';
+import { Colors } from '@/constants/theme';
+
+const SPRITE_FRAME_SIZE = 32;
+const SPRITE_BASE_SCALE = 7;
+
+type SpriteDefinition = {
+  source: ImageSourcePropType;
+  fps: number;
+  scale?: number;
+};
+
+const CAT_SPRITES = {
+  idle: {
+    source: require('../assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/Idle.png'),
+    fps: 8,
+  },
+  excited: {
+    source: require('../assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/Excited.png'),
+    fps: 10,
+  },
+  sad: {
+    source: require('../assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/Sad.png'),
+    fps: 6,
+  },
+  surprised: {
+    source: require('../assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/Surprised.png'),
+    fps: 9,
+  },
+  sleepy: {
+    source: require('../assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/Sleepy.png'),
+    fps: 6,
+    scale: 7.5,
+  },
+  waiting: {
+    source: require('../assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/Waiting.png'),
+    fps: 7,
+  },
+  sick: {
+    source: require('../assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/catsick1.png'),
+    fps: 6,
+  },
+} as const satisfies Record<string, SpriteDefinition>;
+
+type CatStateKey = keyof typeof CAT_SPRITES;
+
+const EMOTION_TO_CAT_STATE: Record<string, CatStateKey> = {
+  Happy: 'excited',
+  Sad: 'sad',
+  Angry: 'surprised',
+  Fearful: 'surprised',
+  Surprised: 'surprised',
+  Neutral: 'idle',
+  Disgusted: 'sick',
+};
+
+const STAGE_BACKDROP = require('../assets/CatRoomPaid/CatRoomPaid/Rooms/Room7.png');
+
+type EmotionTheme = {
+  background: string;
+  accent: string;
+  badgeBackground: string;
+  border: string;
+  shadow: string;
+};
+
+const EMOTION_THEMES: Record<string, EmotionTheme> = {
+  Happy: {
+    background: 'rgba(120, 166, 255, 0.18)',
+    accent: '#74d4ff',
+    badgeBackground: 'rgba(116, 212, 255, 0.16)',
+    border: 'rgba(116, 212, 255, 0.35)',
+    shadow: 'rgba(116, 212, 255, 0.35)',
+  },
+  Sad: {
+    background: 'rgba(96, 115, 182, 0.2)',
+    accent: '#9bb4ff',
+    badgeBackground: 'rgba(155, 180, 255, 0.16)',
+    border: 'rgba(155, 180, 255, 0.28)',
+    shadow: 'rgba(155, 180, 255, 0.28)',
+  },
+  Angry: {
+    background: 'rgba(255, 100, 132, 0.22)',
+    accent: '#ff6484',
+    badgeBackground: 'rgba(255, 100, 132, 0.16)',
+    border: 'rgba(255, 100, 132, 0.32)',
+    shadow: 'rgba(255, 100, 132, 0.28)',
+  },
+  Fearful: {
+    background: 'rgba(150, 132, 255, 0.22)',
+    accent: '#c7b6ff',
+    badgeBackground: 'rgba(199, 182, 255, 0.16)',
+    border: 'rgba(199, 182, 255, 0.32)',
+    shadow: 'rgba(199, 182, 255, 0.28)',
+  },
+  Surprised: {
+    background: 'rgba(120, 166, 255, 0.2)',
+    accent: '#78a6ff',
+    badgeBackground: 'rgba(120, 166, 255, 0.16)',
+    border: 'rgba(120, 166, 255, 0.32)',
+    shadow: 'rgba(120, 166, 255, 0.28)',
+  },
+  Neutral: {
+    background: 'rgba(88, 108, 156, 0.2)',
+    accent: '#a8b6ff',
+    badgeBackground: 'rgba(168, 182, 255, 0.16)',
+    border: 'rgba(168, 182, 255, 0.24)',
+    shadow: 'rgba(168, 182, 255, 0.2)',
+  },
+  Disgusted: {
+    background: 'rgba(108, 249, 192, 0.2)',
+    accent: '#6cf9c0',
+    badgeBackground: 'rgba(108, 249, 192, 0.16)',
+    border: 'rgba(108, 249, 192, 0.28)',
+    shadow: 'rgba(108, 249, 192, 0.24)',
+  },
+};
+
+const DEFAULT_EMOTION_THEME: EmotionTheme = {
+  background: 'rgba(120, 166, 255, 0.18)',
+  accent: '#74d4ff',
+  badgeBackground: 'rgba(116, 212, 255, 0.16)',
+  border: 'rgba(116, 212, 255, 0.28)',
+  shadow: 'rgba(116, 212, 255, 0.24)',
+};
 
 export default function HomeScreen() {
-  const [catState, setCatState] = useState('idle');
+  const [catState, setCatState] = useState<CatStateKey>('idle');
   const [isCelsius, setIsCelsius] = useState(false);
-  
-  // Sample data - will be replaced with real sensor data later
-  const [temperature, setTemperature] = useState(72); // °F
-  const [humidity, setHumidity] = useState(45); // %
-  const [pressure, setPressure] = useState(1013); // hPa
-  const [aqi, setAqi] = useState(150);
-  const [pm25, setPm25] = useState(45);
-  const [co2, setCo2] = useState(850);
 
-  // Emotion data - will be replaced with real camera/AI data later
+  const [temperature] = useState(72); // °F
+  const [humidity] = useState(45); // %
+  const [pressure] = useState(1013); // hPa
+  const [aqi] = useState(150);
+  const [pm25] = useState(45);
+  const [co2] = useState(850);
+
   const [emotion, setEmotion] = useState('Happy');
   const [emotionEmoji, setEmotionEmoji] = useState('😊');
   const [emotionConfidence, setEmotionConfidence] = useState(87);
   const [lastUpdated, setLastUpdated] = useState('Just now');
 
-  // Convert F to C
-  const fahrenheitToCelsius = (f: number) => Math.round((f - 32) * 5 / 9);
-  
-  // Get display temperature
-  const getDisplayTemp = () => {
-    return isCelsius ? fahrenheitToCelsius(temperature) : temperature;
-  };
-  
-  // Get temperature for color (always use Fahrenheit internally)
-  const getTempForColor = () => {
-    return temperature;
-  };
+  const floatAnim = useRef(new Animated.Value(0)).current;
 
-  // Function to get color based on AQI value
-  const getAQIColor = (value: number) => {
-    if (value <= 50) return '#00e400';
-    if (value <= 100) return '#ffff00';
-    if (value <= 150) return '#ff7e00';
-    if (value <= 200) return '#ff0000';
-    if (value <= 300) return '#8f3f97';
-    return '#7e0023';
-  };
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -12,
+          duration: 2200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 2200,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
 
-  // Function to get color based on temperature
-  const getTempColor = (tempF: number) => {
-    if (tempF < 10) return '#255C99';
-    if (tempF <= 32) return '#4682B4';
-    if (tempF <= 50) return '#ADD8E6';
-    if (tempF <= 65) return '#90EE90';
-    if (tempF <= 75) return '#7FD87F';
-    if (tempF <= 95) return '#FFD700';
-    return '#FF8C00';
-  };
-
-  // Function to get temperature status
-  const getTempStatus = (tempF: number) => {
-    if (tempF < 10) return 'Dangerously Cold';
-    if (tempF <= 32) return 'Freezing';
-    if (tempF <= 50) return 'Cold';
-    if (tempF <= 65) return 'Cool';
-    if (tempF <= 75) return 'Comfortable';
-    if (tempF <= 95) return 'Warm';
-    return 'Hot';
-  };
-
-  // Function to get AQI status
-  const getAQIStatus = (value: number) => {
-    if (value <= 50) return 'Good';
-    if (value <= 100) return 'Moderate';
-    if (value <= 150) return 'Unhealthy for Sensitive';
-    if (value <= 200) return 'Unhealthy';
-    if (value <= 300) return 'Very Unhealthy';
-    return 'Hazardous';
-  };
-
-  // Function to get color based on humidity
-  const getHumidityColor = (value: number) => {
-    if (value < 30) return '#D0AE8B'; // Very Dry - Tan/Beige
-    if (value <= 60) return '#ADD8E6'; // Comfortable - Light Blue
-    return '#4682B4'; // Very Moist - Steel Blue
-  };
-
-  // Function to get humidity status
-  const getHumidityStatus = (value: number) => {
-    if (value < 30) return 'Very Dry';
-    if (value <= 60) return 'Comfortable';
-    return 'Very Moist';
-  };
-
-  // Function to get color based on pressure
-  const getPressureColor = (value: number) => {
-    if (value < 1000) return '#EE3E32'; // Low - Red/Red-Orange (stormy)
-    if (value <= 1020) return '#F5F5F5'; // Normal - Off-White/Light Gray
-    return '#255C99'; // High - Dark Blue (fair/stable)
-  };
-
-  // Function to get pressure status
-  const getPressureStatus = (value: number) => {
-    if (value < 1000) return 'Low (Stormy)';
-    if (value <= 1020) return 'Normal';
-    return 'High (Fair)';
-  };
-
-  // Function to get emotion color - Modern, vibrant, lighthearted palette
-  const getEmotionColor = (emotionName: string) => {
-    const colors: { [key: string]: string } = {
-      'Happy': '#FFE66D',      // Sunny Yellow - warm and cheerful
-      'Sad': '#A0C4FF',        // Soft Blue - gentle and calming
-      'Angry': '#FF6B6B',      // Coral Red - intense but friendly
-      'Fearful': '#C3B1E1',    // Lavender Purple - soft and dreamy
-      'Surprised': '#FFB4A2',  // Peach - playful and energetic
-      'Neutral': '#E3E3E3',    // Light Gray - clean and minimal
-      'Disgusted': '#B4F8C8',  // Mint Green - fresh and light
+    loop.start();
+    return () => {
+      loop.stop();
     };
-    return colors[emotionName] || '#E3E3E3';
-  };
+  }, [floatAnim]);
 
-  // Mock function to simulate continuous emotion detection (will be replaced with real camera/AI stream)
-  // In production, this will be replaced with a real-time video stream analysis
-  const simulateEmotionDetection = () => {
+  const simulateEmotionDetection = useCallback(() => {
     const emotions = [
       { name: 'Happy', emoji: '😊' },
       { name: 'Sad', emoji: '😢' },
@@ -129,107 +191,300 @@ export default function HomeScreen() {
       { name: 'Neutral', emoji: '😐' },
       { name: 'Disgusted', emoji: '🤢' },
     ];
-    
+
     const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
-    const randomConfidence = Math.floor(Math.random() * 30) + 70; // 70-99%
-    
+    const randomConfidence = Math.floor(Math.random() * 30) + 70;
+
     setEmotion(randomEmotion.name);
     setEmotionEmoji(randomEmotion.emoji);
     setEmotionConfidence(randomConfidence);
     setLastUpdated('Just now');
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(simulateEmotionDetection, 12000);
+    return () => clearInterval(interval);
+  }, [simulateEmotionDetection]);
+
+  useEffect(() => {
+    const mapped = EMOTION_TO_CAT_STATE[emotion];
+    if (mapped && mapped !== catState) {
+      setCatState(mapped);
+    }
+  }, [catState, emotion]);
+
+  const activeSprite = CAT_SPRITES[catState];
+  const spriteScale = activeSprite.scale ?? SPRITE_BASE_SCALE;
+  const spriteDimensions = useMemo(
+    () => ({
+      width: SPRITE_FRAME_SIZE * spriteScale,
+      height: SPRITE_FRAME_SIZE * spriteScale,
+    }),
+    [spriteScale],
+  );
+
+  const emotionTheme = useMemo<EmotionTheme>(() => {
+    return EMOTION_THEMES[emotion] ?? DEFAULT_EMOTION_THEME;
+  }, [emotion]);
+
+  const fahrenheitToCelsius = (f: number) => Math.round(((f - 32) * 5) / 9);
+
+  const getDisplayTemp = () => (isCelsius ? fahrenheitToCelsius(temperature) : temperature);
+
+  const getTempColor = (tempF: number) => {
+    if (tempF <= 45) return '#5a7cff';
+    if (tempF <= 60) return '#74d4ff';
+    if (tempF <= 75) return '#6cf9c0';
+    if (tempF <= 90) return '#fca34c';
+    return '#ff6484';
   };
+
+  const getTempStatus = (tempF: number) => {
+    if (tempF < 45) return 'Chilly';
+    if (tempF <= 60) return 'Cool';
+    if (tempF <= 75) return 'Comfortable';
+    if (tempF <= 90) return 'Warm';
+    return 'Hot';
+  };
+
+  const getAQIColor = (value: number) => {
+    if (value <= 50) return Colors.dark.accentSecondary;
+    if (value <= 100) return Colors.dark.accentTertiary;
+    if (value <= 150) return '#fca34c';
+    if (value <= 200) return '#ff6484';
+    if (value <= 300) return '#c38cff';
+    return '#ff6484';
+  };
+
+  const getAQIStatus = (value: number) => {
+    if (value <= 50) return 'Excellent';
+    if (value <= 100) return 'Moderate';
+    if (value <= 150) return 'Sensitive';
+    if (value <= 200) return 'Unhealthy';
+    if (value <= 300) return 'Very Unhealthy';
+    return 'Hazardous';
+  };
+
+  const getHumidityColor = (value: number) => {
+    if (value < 30) return '#fca34c';
+    if (value <= 60) return Colors.dark.accentSecondary;
+    return Colors.dark.accentPrimary;
+  };
+
+  const getHumidityStatus = (value: number) => {
+    if (value < 30) return 'Very Dry';
+    if (value <= 60) return 'Comfortable';
+    return 'Humid';
+  };
+
+  const getPressureColor = (value: number) => {
+    if (value < 1000) return '#ff6484';
+    if (value <= 1020) return Colors.dark.accentTertiary;
+    return Colors.dark.accentPrimary;
+  };
+
+  const getPressureStatus = (value: number) => {
+    if (value < 1000) return 'Storm Risk';
+    if (value <= 1020) return 'Stable';
+    return 'Fair';
+  };
+
+  const pixelStageImageStyle = useMemo(
+    () =>
+      Platform.OS === 'web'
+        ? ({ imageRendering: 'pixelated' } as Record<string, unknown>)
+        : {},
+    [],
+  );
 
   return (
     <ThemedView style={styles.container}>
-      {/* Cat Box - 25% of screen */}
-      <View style={styles.catBox}>
-        <Image 
-          source={require('@/assets/CatPackPaid/CatPackPaid/Sprites/Classical/Individual/Idle.png')}
-          style={styles.catImage}
-          resizeMode="contain"
-        />
-      </View>
+      <View style={styles.backgroundGlowPrimary} pointerEvents="none" />
+      <View style={styles.backgroundGlowSecondary} pointerEvents="none" />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.shell}>
+          <View style={styles.headerRow}>
+            <ThemedText type="title" style={styles.title}>
+              Ambient Companion
+            </ThemedText>
+            <ThemedText style={styles.subtitle}>VirtualPet energy. Mobile senses.</ThemedText>
+          </View>
 
-      {/* Body Content - 75% of screen */}
-      <View style={styles.bodyBox}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.cardsContainer}>
-            {/* Temperature Card */}
-            <TouchableOpacity 
-              style={[styles.card, { backgroundColor: '#FFF3E0' }]}
-              activeOpacity={0.7}
-              onPress={() => setIsCelsius(!isCelsius)}
-            >
-              <Text style={styles.cardTitle}>Temperature</Text>
-              <View style={styles.cardContent}>
-                <View style={styles.dataSection}>
-                  <Text style={styles.mainValue}>
-                    {getDisplayTemp()}°{isCelsius ? 'C' : 'F'}
-                  </Text>
-                  <Text style={styles.statusText}>{getTempStatus(getTempForColor())}</Text>
-                  <Text style={styles.tapHint}>Tap to switch</Text>
-                </View>
-                <View style={[styles.colorBar, { backgroundColor: getTempColor(getTempForColor()) }]} />
+          <View style={styles.stageCard}>
+            <View style={styles.stageHeader}>
+              <ThemedText style={styles.stageTitle}>Cat Habitat</ThemedText>
+              <View
+                style={[
+                  styles.badge,
+                  {
+                    backgroundColor: emotionTheme.badgeBackground,
+                    borderColor: emotionTheme.border,
+                  },
+                ]}
+              >
+                <ThemedText style={[styles.badgeText, { color: emotionTheme.accent }]}>
+                  {emotion.toUpperCase()}
+                </ThemedText>
               </View>
+            </View>
+            <ImageBackground
+              source={STAGE_BACKDROP}
+              style={styles.stageSurface}
+              imageStyle={[styles.stageSurfaceImage, pixelStageImageStyle]}
+            >
+              <View style={styles.stageSurfaceOverlay}>
+                <Animated.View
+                  style={[
+                    styles.catSpriteWrapper,
+                    spriteDimensions,
+                    { transform: [{ translateY: floatAnim }] },
+                  ]}
+                >
+                  <SpriteAnimator
+                    source={activeSprite.source}
+                    frameWidth={SPRITE_FRAME_SIZE}
+                    frameHeight={SPRITE_FRAME_SIZE}
+                    fps={activeSprite.fps}
+                    scale={spriteScale}
+                    accessibilityLabel={`Cat mood ${emotion.toLowerCase()}`}
+                  />
+                </Animated.View>
+                <View style={styles.touchHint}>
+                  <ThemedText style={styles.touchHintText}>Stay curious, stay cozy.</ThemedText>
+                </View>
+              </View>
+            </ImageBackground>
+            <View style={styles.stageMeta}>
+              <View style={styles.metaColumn}>
+                <ThemedText style={styles.metaLabel}>Confidence</ThemedText>
+                <ThemedText style={styles.metaValue}>{emotionConfidence}%</ThemedText>
+              </View>
+              <View style={styles.metaColumn}>
+                <ThemedText style={styles.metaLabel}>Updated</ThemedText>
+                <ThemedText style={styles.metaValue}>{lastUpdated}</ThemedText>
+              </View>
+              <TouchableOpacity
+                style={styles.metaAction}
+                onPress={simulateEmotionDetection}
+                activeOpacity={0.75}
+              >
+                <ThemedText style={styles.metaActionText}>Refresh mood</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.metricsGrid}>
+            <TouchableOpacity
+              style={styles.metricCard}
+              activeOpacity={0.82}
+              onPress={() => setIsCelsius((prev) => !prev)}
+            >
+              <ThemedText style={styles.cardTitle}>Temperature</ThemedText>
+              <View style={styles.metricPrimaryRow}>
+                <ThemedText style={styles.primaryValue}>
+                  {getDisplayTemp()}°{isCelsius ? 'C' : 'F'}
+                </ThemedText>
+                <ThemedText style={styles.statusText}>{getTempStatus(temperature)}</ThemedText>
+              </View>
+              <ThemedText style={styles.cardFooter}>Tap to switch units</ThemedText>
+              <View
+                style={[
+                  styles.accentBar,
+                  {
+                    backgroundColor: getTempColor(temperature),
+                  },
+                ]}
+              />
             </TouchableOpacity>
 
-            {/* Humidity Card */}
-            <View style={[styles.card, { backgroundColor: '#E0F7F4' }]}>
-              <Text style={styles.cardTitle}>Humidity</Text>
-              <View style={styles.cardContent}>
-                <View style={styles.dataSection}>
-                  <Text style={styles.mainValue}>{humidity}%</Text>
-                  <Text style={styles.statusText}>{getHumidityStatus(humidity)}</Text>
-                </View>
-                <View style={[styles.colorBar, { backgroundColor: getHumidityColor(humidity) }]} />
+            <View style={styles.metricCard}>
+              <ThemedText style={styles.cardTitle}>Humidity</ThemedText>
+              <View style={styles.metricPrimaryRow}>
+                <ThemedText style={styles.primaryValue}>{humidity}%</ThemedText>
+                <ThemedText style={styles.statusText}>{getHumidityStatus(humidity)}</ThemedText>
               </View>
+              <ThemedText style={styles.cardFooter}>Ideal: 40% – 50%</ThemedText>
+              <View
+                style={[
+                  styles.accentBar,
+                  {
+                    backgroundColor: getHumidityColor(humidity),
+                  },
+                ]}
+              />
             </View>
 
-            {/* Air Quality Card */}
-            <View style={[styles.card, { backgroundColor: '#E3F2FD' }]}>
-              <Text style={styles.cardTitle}>Air Quality</Text>
-              <View style={styles.cardContent}>
-                <View style={styles.dataSection}>
-                  <Text style={styles.mainValue}>{aqi}</Text>
-                  <Text style={styles.subValue}>AQI</Text>
-                  <Text style={styles.statusText}>{getAQIStatus(aqi)}</Text>
-                  <Text style={styles.detailText}>PM2.5: {pm25} μg/m³</Text>
-                  <Text style={styles.detailText}>CO2: {co2} ppm</Text>
-                </View>
-                <View style={[styles.colorBar, { backgroundColor: getAQIColor(aqi) }]} />
+            <View style={styles.metricCard}>
+              <ThemedText style={styles.cardTitle}>Air Quality</ThemedText>
+              <View style={styles.metricPrimaryRow}>
+                <ThemedText style={styles.primaryValue}>{aqi}</ThemedText>
+                <ThemedText style={styles.statusText}>{getAQIStatus(aqi)}</ThemedText>
               </View>
+              <View style={styles.detailRow}>
+                <ThemedText style={styles.detailText}>PM2.5 {pm25} μg/m³</ThemedText>
+                <ThemedText style={styles.detailText}>CO₂ {co2} ppm</ThemedText>
+              </View>
+              <View
+                style={[
+                  styles.accentBar,
+                  {
+                    backgroundColor: getAQIColor(aqi),
+                  },
+                ]}
+              />
             </View>
 
-            {/* Barometric Pressure Card */}
-            <View style={[styles.card, { backgroundColor: '#F3E5F5' }]}>
-              <Text style={styles.cardTitle}>Pressure</Text>
-              <View style={styles.cardContent}>
-                <View style={styles.dataSection}>
-                  <Text style={styles.mainValue}>{pressure}</Text>
-                  <Text style={styles.subValue}>hPa</Text>
-                  <Text style={styles.statusText}>{getPressureStatus(pressure)}</Text>
-                </View>
-                <View style={[styles.colorBar, { backgroundColor: getPressureColor(pressure) }]} />
+            <View style={styles.metricCard}>
+              <ThemedText style={styles.cardTitle}>Barometric</ThemedText>
+              <View style={styles.metricPrimaryRow}>
+                <ThemedText style={styles.primaryValue}>{pressure}</ThemedText>
+                <ThemedText style={styles.statusText}>{getPressureStatus(pressure)}</ThemedText>
               </View>
+              <ThemedText style={styles.cardFooter}>Sea level reference</ThemedText>
+              <View
+                style={[
+                  styles.accentBar,
+                  {
+                    backgroundColor: getPressureColor(pressure),
+                  },
+                ]}
+              />
             </View>
 
-            {/* Emotion Card - Takes 2 spaces */}
-            <View style={[styles.emotionCard, { backgroundColor: getEmotionColor(emotion) }]}>
-              <Text style={styles.cardTitle}>Emotion Analysis</Text>
-              <View style={styles.emotionContent}>
-                <View style={styles.cameraIndicator}>
-                  <Text style={styles.cameraIcon}>📹</Text>
-                  <Text style={styles.liveText}>LIVE</Text>
+            <View
+              style={[
+                styles.metricCard,
+                styles.metricCardFull,
+                {
+                  backgroundColor: emotionTheme.background,
+                  borderColor: emotionTheme.border,
+                  shadowColor: emotionTheme.shadow,
+                },
+              ]}
+            >
+              <View style={styles.emotionHeader}>
+                <View style={styles.livePill}>
+                  <ThemedText style={styles.liveLabel}>LIVE</ThemedText>
                 </View>
-                <Text style={styles.emotionEmoji}>{emotionEmoji}</Text>
-                <Text style={styles.emotionName}>{emotion.toUpperCase()}</Text>
-                <Text style={styles.emotionConfidence}>{emotionConfidence}% Confidence</Text>
-                <Text style={styles.lastUpdated}>Updated: {lastUpdated}</Text>
+                <ThemedText style={[styles.cardTitle, styles.emotionTitle]}>Emotion Feed</ThemedText>
+              </View>
+              <View style={styles.emotionBody}>
+                <ThemedText style={[styles.emotionEmoji, { color: emotionTheme.accent }]}>
+                  {emotionEmoji}
+                </ThemedText>
+                <ThemedText style={styles.emotionName}>{emotion.toUpperCase()}</ThemedText>
+                <ThemedText style={[styles.emotionConfidence, { color: emotionTheme.accent }]}>
+                  {emotionConfidence}% Confidence
+                </ThemedText>
+                <ThemedText style={styles.lastUpdated}>Updated {lastUpdated}</ThemedText>
               </View>
             </View>
           </View>
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -237,179 +492,279 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#4f311dff',
+    backgroundColor: Colors.dark.background,
   },
-  catBox: {
-    flex: 0.45,
-    backgroundColor: '#E8F4F8',
-    margin: '5%',
-    borderWidth: 10,
-    borderColor: '#52f652ff',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+  backgroundGlowPrimary: {
+    position: 'absolute',
+    top: -120,
+    right: -90,
+    width: 300,
+    height: 300,
+    borderRadius: 180,
+    backgroundColor: 'rgba(120, 166, 255, 0.24)',
+    opacity: 0.85,
+    shadowColor: 'rgba(120, 166, 255, 0.4)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 80,
   },
-  catImage: {
-    width: 200,
-    height: 200,
-  },
-  bodyBox: {
-    flex: 0.75,
-    backgroundColor: '#FFFFFF',
+  backgroundGlowSecondary: {
+    position: 'absolute',
+    bottom: -160,
+    left: -110,
+    width: 340,
+    height: 340,
+    borderRadius: 200,
+    backgroundColor: 'rgba(108, 249, 192, 0.18)',
+    opacity: 0.6,
+    shadowColor: 'rgba(108, 249, 192, 0.35)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 80,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 80,
   },
-  cardsContainer: {
+  shell: {
+    gap: 24,
+  },
+  headerRow: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: {
+    textAlign: 'center',
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: 0.6,
+  },
+  subtitle: {
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+  },
+  stageCard: {
+    borderRadius: 32,
+    padding: 24,
+    backgroundColor: Colors.dark.surface,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    shadowColor: 'rgba(12, 14, 20, 0.75)',
+    shadowOffset: { width: 0, height: 24 },
+    shadowOpacity: 0.6,
+    shadowRadius: 36,
+    elevation: 18,
+    gap: 18,
+  },
+  stageHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 15,
-    maxWidth: 570,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  card: {
-    width: 270,
-    height: 270,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  cardTitle: {
-    fontSize: 20,
+  stageTitle: {
+    fontSize: 18,
     fontWeight: '600',
-    marginBottom: 12,
-    color: '#333',
+    letterSpacing: 0.5,
   },
-  cardContent: {
-    flex: 1,
+  badge: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  stageSurface: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: Colors.dark.surfaceSecondary,
+  },
+  stageSurfaceImage: {
+    resizeMode: 'cover',
+    opacity: 0.45,
+  },
+  stageSurfaceOverlay: {
+    paddingVertical: 42,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(10, 14, 22, 0.55)',
+  },
+  catSpriteWrapper: {
+    width: SPRITE_FRAME_SIZE * SPRITE_BASE_SCALE,
+    height: SPRITE_FRAME_SIZE * SPRITE_BASE_SCALE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  touchHint: {
+    marginTop: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  touchHintText: {
+    fontSize: 12,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    color: Colors.dark.textMuted,
+  },
+  stageMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 16,
   },
-  dataSection: {
+  metaColumn: {
     flex: 1,
-    justifyContent: 'center',
-    gap: 5,
+    gap: 4,
   },
-  mainValue: {
-    fontSize: 48,
-    fontWeight: '200',
-    color: '#000',
+  metaLabel: {
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    color: Colors.dark.textMuted,
   },
-  subValue: {
+  metaValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+  },
+  metaAction: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.dark.accentPrimary,
+    backgroundColor: 'rgba(120, 166, 255, 0.12)',
+  },
+  metaActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    color: Colors.dark.accentPrimary,
+    textTransform: 'uppercase',
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  metricCard: {
+    flexBasis: '48%',
+    minWidth: 260,
+    borderRadius: 28,
+    padding: 22,
+    backgroundColor: Colors.dark.surfaceElevated,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    shadowColor: 'rgba(12, 14, 20, 0.6)',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.45,
+    shadowRadius: 30,
+    elevation: 12,
+    gap: 14,
+  },
+  metricCardFull: {
+    flexBasis: '100%',
+  },
+  cardTitle: {
     fontSize: 16,
-    color: '#666',
-    marginTop: -5,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+  },
+  metricPrimaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 12,
+  },
+  primaryValue: {
+    fontSize: 40,
+    fontWeight: '200',
+    letterSpacing: 1,
   },
   statusText: {
-    fontSize: 18,
-    color: '#555',
-    marginTop: 5,
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.dark.textMuted,
+    letterSpacing: 0.6,
   },
-  tapHint: {
+  cardFooter: {
     fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-    marginTop: 5,
+    color: Colors.dark.textMuted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  accentBar: {
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: Colors.dark.accentPrimary,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
   },
   detailText: {
-    fontSize: 15,
-    color: '#777',
-    marginTop: 3,
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
-  colorBar: {
-    width: 35,
-    height: '100%',
-    borderRadius: 15,
-    marginLeft: 15,
-  },
-  emotionCard: {
-    width: 555, // Takes 2 card spaces (270 + 270 + 15 gap)
-    height: 270,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  emotionContent: {
-    flex: 1,
-    justifyContent: 'center',
+  emotionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
+  },
+  livePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(12, 14, 24, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  liveLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    color: 'rgba(255, 255, 255, 0.78)',
+  },
+  emotionTitle: {
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  emotionBody: {
+    alignItems: 'center',
+    gap: 8,
   },
   emotionEmoji: {
     fontSize: 72,
-    marginBottom: 10,
-  },
-  emotionName: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#2C3E50',
-    letterSpacing: 1,
-  },
-  emotionConfidence: {
-    fontSize: 18,
-    color: '#34495E',
-    fontWeight: '600',
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  cameraIndicator: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FF4757',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  cameraIcon: {
-    fontSize: 14,
-  },
-  liveText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFF',
-    letterSpacing: 0.5,
-  },
-  lastUpdated: {
-    fontSize: 13,
-    color: '#7F8C8D',
-    fontStyle: 'italic',
     marginTop: 8,
   },
-  captureButton: {
-    marginTop: 15,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  emotionName: {
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 1.2,
   },
-  captureButtonText: {
-    fontSize: 16,
+  emotionConfidence: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    letterSpacing: 1,
+  },
+  lastUpdated: {
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+    letterSpacing: 0.6,
   },
 });

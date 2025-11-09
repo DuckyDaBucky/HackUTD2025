@@ -5,26 +5,32 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const sharedPalette = {
+  text: 'rgba(236, 240, 255, 0.94)',
+  textMuted: 'rgba(204, 214, 244, 0.7)',
+  background: '#0b0d14',
+  surface: 'rgba(18, 24, 36, 0.72)',
+  surfaceElevated: 'rgba(18, 24, 36, 0.58)',
+  surfaceSecondary: 'rgba(14, 18, 28, 0.68)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  glow: 'rgba(120, 166, 255, 0.25)',
+  glass: 'rgba(255, 255, 255, 0.12)',
+  accentPrimary: '#78a6ff',
+  accentSecondary: '#6cf9c0',
+  accentTertiary: '#74d4ff',
+  accentSuccess: '#61f4b4',
+  accentWarning: '#fca34c',
+  accentDanger: '#ff6484',
+  tint: '#78a6ff',
+  icon: '#8da0ff',
+  iconMuted: '#46506c',
+  tabIconDefault: '#46506c',
+  tabIconSelected: '#78a6ff',
+};
 
 export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+  light: { ...sharedPalette },
+  dark: { ...sharedPalette },
 };
 
 export const Fonts = Platform.select({
