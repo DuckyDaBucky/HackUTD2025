@@ -1,19 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import baseRoomBackdrop from '../../../assets/CatRoomPaid/ExampleRooms/ExampleRoom 2.png';
 import ContextPanel from './ContextPanel';
 import PetStage from './PetStage';
 import ClockDisplay from './ClockDisplay';
-import { usePetAnimation } from '../hooks/usePetAnimation';
 import {
+  DEFAULT_PET_STATE,
   getPetAnimation,
   type PetAnimationDefinition,
+  type PetAnimationState,
 } from '../constants/petAnimations';
+import { useRealtimeState } from '../state/realtimeState';
 // import catSleepingBackdrop from '../../../assets/CatRoomPaid/CatSleeping.png';
 
 type OptionTemplate = {
   label: string;
   variant?: 'primary' | 'secondary';
-  targetState?: string;
+  targetState?: PetAnimationState;
 };
 
 export type OptionSet = {
@@ -48,11 +50,17 @@ const optionSets: OptionSet[] = [
 export default function PetScreen() {
   const currentSet = optionSets[0];
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { animation: activeAnimation, togglePetAnimation } = usePetAnimation();
+  const { cat, updateCat, status } = useRealtimeState();
   const [petOverride, setPetOverride] = useState<PetAnimationDefinition | null>(
     null,
   );
-  const [isSleeping, setIsSleeping] = useState(false);
+
+  const remoteMood = cat?.mood ?? DEFAULT_PET_STATE;
+  const activeAnimation = useMemo(
+    () => getPetAnimation(remoteMood),
+    [remoteMood],
+  );
+  const isSleeping = ['sleep', 'sleeping', 'sleeping-alt'].includes(remoteMood);
 
   const isPetting = petOverride !== null;
 
@@ -68,6 +76,10 @@ export default function PetScreen() {
   } as const;
 
   const displayMessage = (() => {
+    if (status !== 'connected') {
+      return 'Connecting to your study buddy...';
+    }
+
     if (isPetting) {
       return 'The pet looks a bit shy but loves the attention!';
     }
@@ -95,19 +107,19 @@ export default function PetScreen() {
   };
 
   const handleToggleSleep = () => {
-    if (isSleeping) {
-      setIsSleeping(false);
-      setPetOverride(null);
-      return;
-    }
-
     if (revertTimerRef.current) {
       clearTimeout(revertTimerRef.current);
       revertTimerRef.current = null;
     }
 
     setPetOverride(null);
-    setIsSleeping(true);
+
+    if (isSleeping) {
+      updateCat({ mood: DEFAULT_PET_STATE });
+      return;
+    }
+
+    updateCat({ mood: 'sleeping' });
   };
 
   useEffect(() => {
@@ -119,12 +131,6 @@ export default function PetScreen() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (isSleeping) {
-      setPetOverride(getPetAnimation('sleeping'));
-    }
-  }, [isSleeping]);
 
   const roomBackdrop = isSleeping ? baseRoomBackdrop : baseRoomBackdrop;
   const shellClassName = ['pet-shell'];
@@ -140,22 +146,26 @@ export default function PetScreen() {
     layoutClassName.push('sleep-focus');
   }
 
-  const focusState = currentSet.options[1].targetState ?? 'waiting';
-  const breakState = currentSet.options[0].targetState ?? 'excited';
+  const fallbackFocusState: PetAnimationState = 'waiting';
+  const fallbackBreakState: PetAnimationState = 'excited';
+  const focusState: PetAnimationState =
+    currentSet.options[1].targetState ?? fallbackFocusState;
+  const breakState: PetAnimationState =
+    currentSet.options[0].targetState ?? fallbackBreakState;
 
   const handleTimerStart = () => {
     if (isSleeping) return;
-    togglePetAnimation(focusState);
+    updateCat({ mood: focusState });
   };
 
   const handleTimerPause = () => {
     if (isSleeping) return;
-    togglePetAnimation(breakState);
+    updateCat({ mood: breakState });
   };
 
   const handleTimerReset = () => {
     if (isSleeping) return;
-    togglePetAnimation('idle');
+    updateCat({ mood: DEFAULT_PET_STATE });
   };
 
   return (

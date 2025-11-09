@@ -1,4 +1,4 @@
-import { useMoodDetection } from '../hooks/useMoodDetection';
+import useMoodDetection from '../hooks/useMoodDetection';
 import StudyTimerPanel from './StudyTimerPanel';
 export type ContextPanelProps = {
   message: string;

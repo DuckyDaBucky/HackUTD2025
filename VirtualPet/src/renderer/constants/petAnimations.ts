@@ -10,15 +10,7 @@ import layDown from '../../../assets/CatPackPaid/Sprites/Classical/Individual/La
 import shy from '../../../assets/CatPackPaid/Sprites/Classical/Individual/shy.png';
 import catSleeping from '../../../assets/CatRoomPaid/CatSleeping.png';
 
-export type PetAnimationDefinition = {
-  state: string;
-  animationSrc: string;
-  fps?: number;
-};
-
-export const DEFAULT_PET_STATE = 'idle';
-
-export const petAnimations: PetAnimationDefinition[] = [
+export const petAnimations = [
   { state: 'idle', animationSrc: idle, fps: 8 },
   { state: 'idle-alt', animationSrc: idle2, fps: 8 },
   { state: 'sleep', animationSrc: sleep, fps: 6 },
@@ -31,7 +23,12 @@ export const petAnimations: PetAnimationDefinition[] = [
   { state: 'shy', animationSrc: shy, fps: 10 },
   { state: 'sleeping', animationSrc: sleep, fps: 6 },
   { state: 'sleeping-alt', animationSrc: catSleeping, fps: 4 },
-];
+] as const;
+
+export type PetAnimationDefinition = (typeof petAnimations)[number];
+export type PetAnimationState = PetAnimationDefinition['state'];
+
+export const DEFAULT_PET_STATE: PetAnimationState = 'idle';
 
 export function getPetAnimation(state: string): PetAnimationDefinition {
   return (

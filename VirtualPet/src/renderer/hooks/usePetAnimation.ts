@@ -3,24 +3,25 @@ import {
   DEFAULT_PET_STATE,
   getPetAnimation,
   petAnimations,
+  type PetAnimationState,
 } from '../constants/petAnimations';
 
 export type UsePetAnimationResult = {
-  state: string;
+  state: PetAnimationState;
   animation: ReturnType<typeof getPetAnimation>;
-  setPetAnimation: (state: string) => void;
-  togglePetAnimation: (nextState?: string) => void;
+  setPetAnimation: (state: PetAnimationState) => void;
+  togglePetAnimation: (nextState?: PetAnimationState) => void;
 };
 
 export function usePetAnimation(
-  initialState = DEFAULT_PET_STATE,
+  initialState: PetAnimationState = DEFAULT_PET_STATE,
 ): UsePetAnimationResult {
   const [state, setState] = useState(initialState);
 
   const animation = useMemo(() => getPetAnimation(state), [state]);
 
   const setPetAnimation = useCallback(
-    (nextState: string) => {
+    (nextState: PetAnimationState) => {
       if (nextState === state) {
         return;
       }
@@ -30,7 +31,7 @@ export function usePetAnimation(
   );
 
   const togglePetAnimation = useCallback(
-    (nextState?: string) => {
+    (nextState?: PetAnimationState) => {
       if (nextState) {
         setState(nextState);
         return;
