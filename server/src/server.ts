@@ -12,6 +12,8 @@ import {
   updateUserPreferences,
   getUserStats,
   updateUserStats,
+  getMoodConfidence,
+  type CatAnimationState,
 } from "./db";
 
 const PORT = Number(process.env.PORT) || 4000;
@@ -50,7 +52,7 @@ wss.on("connection", (ws) => {
 
   send(ws, { type: "cat:state", payload: getCatState() });
   send(ws, { type: "prefs:state", payload: getUserPreferences() });
-  send(ws, { type: "stats:state", payload: getUserStats() });
+  send(ws, { type: "stats:state", payload: buildStatsPayload() });
 
   ws.on("message", (raw) => {
     let msg: any;
@@ -103,13 +105,16 @@ wss.on("connection", (ws) => {
       // --- User Stats ---
 
       case "stats:get": {
-        const stats = getUserStats();
-        return send(ws, { type: "stats:state", payload: stats });
+        return send(ws, { type: "stats:state", payload: buildStatsPayload() });
       }
 
       case "stats:update": {
-        const updated = updateUserStats(payload || {});
-        broadcast({ type: "stats:state", payload: updated });
+        const patch = payload || {};
+        if (typeof patch.confidence === "number") {
+          lastConfidenceValue = patch.confidence;
+        }
+        updateUserStats(patch);
+        broadcast({ type: "stats:state", payload: buildStatsPayload() });
         return;
       }
 
@@ -139,13 +144,23 @@ function broadcast(message: any) {
   }
 }
 
+function buildStatsPayload() {
+  const stats = getUserStats();
+  const confidenceMap = getMoodConfidence();
+  const moodKey = stats.mood as CatAnimationState;
+  const mapConfidence = confidenceMap[moodKey] ?? 0;
+  const confidence = lastConfidenceValue ?? mapConfidence;
+  return { ...stats, confidence, confidence_map: confidenceMap };
+}
+
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
 
 let lastCatState = getCatState();
 let lastPrefs = getUserPreferences();
-let lastStats = getUserStats();
+let lastConfidenceValue: number | null = null;
+let lastStatsPayload = buildStatsPayload();
 
 function catStateChanged(
   prev: ReturnType<typeof getCatState>,
@@ -171,14 +186,16 @@ function prefsChanged(
 }
 
 function statsChanged(
-  prev: ReturnType<typeof getUserStats>,
-  next: typeof prev
+  prev: ReturnType<typeof buildStatsPayload>,
+  next: ReturnType<typeof buildStatsPayload>
 ) {
   return (
     prev.mood !== next.mood ||
     prev.room_temperature !== next.room_temperature ||
     prev.focus_level !== next.focus_level ||
-    prev.last_updated !== next.last_updated
+    prev.confidence !== next.confidence ||
+    prev.last_updated !== next.last_updated ||
+    JSON.stringify(prev.confidence_map) !== JSON.stringify(next.confidence_map)
   );
 }
 
@@ -195,9 +212,10 @@ setInterval(() => {
     broadcast({ type: "prefs:state", payload: nextPrefs });
   }
 
-  const nextStats = getUserStats();
-  if (statsChanged(lastStats, nextStats)) {
-    lastStats = nextStats;
-    broadcast({ type: "stats:state", payload: nextStats });
+  const nextStatsPayload = buildStatsPayload();
+  if (statsChanged(lastStatsPayload, nextStatsPayload)) {
+    lastStatsPayload = nextStatsPayload;
+    lastConfidenceValue = nextStatsPayload.confidence ?? lastConfidenceValue;
+    broadcast({ type: "stats:state", payload: nextStatsPayload });
   }
 }, 1500);

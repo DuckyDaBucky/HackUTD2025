@@ -10,6 +10,8 @@ exports.updateCatState = updateCatState;
 exports.getUserPreferences = getUserPreferences;
 exports.updateUserPreferences = updateUserPreferences;
 exports.getUserStats = getUserStats;
+exports.getMoodConfidence = getMoodConfidence;
+exports.updateMoodConfidence = updateMoodConfidence;
 exports.updateUserStats = updateUserStats;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const fs_1 = __importDefault(require("fs"));
@@ -139,6 +141,16 @@ db.exec(`
     last_updated TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+// Confidence per mood lives in a dedicated table so that each animation state can
+// carry its own score.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mood_confidence (
+    mood TEXT PRIMARY KEY,
+    confidence REAL NOT NULL DEFAULT 0
+  );
+`);
+const ensureConfidenceRow = db.prepare(`INSERT OR IGNORE INTO mood_confidence (mood, confidence) VALUES (?, 0)`);
+CAT_ANIMATION_STATES.forEach((state) => ensureConfidenceRow.run(state));
 db.exec(`
   INSERT OR IGNORE INTO user_stats (id, mood, room_temperature, focus_level, last_updated)
   VALUES (1, 'ok', 22.0, 5, datetime('now'));
@@ -147,6 +159,26 @@ function getUserStats() {
     return db
         .prepare("SELECT * FROM user_stats WHERE id = 1")
         .get();
+}
+function getMoodConfidence() {
+    const rows = db
+        .prepare("SELECT mood, confidence FROM mood_confidence")
+        .all();
+    const map = {};
+    CAT_ANIMATION_STATES.forEach((state) => {
+        map[state] = 0;
+    });
+    rows.forEach((row) => {
+        map[row.mood] = row.confidence ?? 0;
+    });
+    return map;
+}
+function updateMoodConfidence(mood, confidence) {
+    db.prepare(`
+    INSERT INTO mood_confidence (mood, confidence)
+    VALUES (?, ?)
+    ON CONFLICT(mood) DO UPDATE SET confidence = excluded.confidence
+  `).run(mood, confidence);
 }
 function updateUserStats(patch) {
     const current = getUserStats();
@@ -158,5 +190,8 @@ function updateUserStats(patch) {
     SET mood = ?, room_temperature = ?, focus_level = ?, last_updated = datetime('now')
     WHERE id = 1
   `).run(mood, room_temperature, focus_level);
+    if (patch.confidence !== undefined && isCatAnimationState(patch.mood)) {
+        updateMoodConfidence(patch.mood, patch.confidence);
+    }
     return getUserStats();
 }

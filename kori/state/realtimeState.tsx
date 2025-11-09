@@ -34,6 +34,9 @@ type UserStats = {
   mood: string;
   roomTemperature: number;
   focusLevel: number;
+  noisePollution?: number;
+  confidence: number;
+  confidenceMap: Partial<Record<PetAnimationState, number>> | null;
   lastUpdated: string;
 };
 
@@ -52,6 +55,8 @@ type StatsUpdatePayload = Partial<{
   mood: string;
   room_temperature: number;
   focus_level: number;
+  confidence: number;
+  noise_pollution: number;
 }>;
 
 type ClientMessage =
@@ -79,6 +84,8 @@ type RealtimeContextValue = {
       mood?: string;
       roomTemperature?: number;
       focusLevel?: number;
+      confidence?: number;
+      noisePollution?: number;
     }>
   ) => void;
 };
@@ -189,7 +196,28 @@ function toUserStats(payload: any): UserStats {
       ? payload.last_updated
       : new Date().toISOString();
 
-  return { mood, roomTemperature, focusLevel, lastUpdated };
+  const confidenceMap: Partial<Record<PetAnimationState, number>> | null =
+    payload && typeof payload === "object" && payload.confidence_map
+      ? Object.entries(payload.confidence_map).reduce(
+          (acc, [key, value]) => {
+            if (VALID_CAT_STATES.has(key as PetAnimationState) && typeof value === "number") {
+              acc[key as PetAnimationState] = value;
+            }
+            return acc;
+          },
+          {} as Partial<Record<PetAnimationState, number>>,
+        )
+      : null;
+
+  const noisePollution =
+    typeof payload?.noise_pollution === "number" ? payload.noise_pollution : undefined;
+
+  const confidence =
+    typeof payload?.confidence === "number"
+      ? payload.confidence
+      : confidenceMap?.[mood as PetAnimationState] ?? 0;
+
+  return { mood, roomTemperature, focusLevel, noisePollution, confidence, confidenceMap, lastUpdated };
 }
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
@@ -367,9 +395,15 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       if (patch.focusLevel !== undefined) {
         payload.focus_level = patch.focusLevel;
       }
+      if (patch.confidence !== undefined) {
+        payload.confidence = patch.confidence;
+      }
+      if (patch.noisePollution !== undefined) {
+        payload.noise_pollution = patch.noisePollution;
+      }
       sendMessage({ type: "stats:update", payload });
     },
-    [sendMessage]
+    [sendMessage],
   );
 
   const contextValue = useMemo<RealtimeContextValue>(

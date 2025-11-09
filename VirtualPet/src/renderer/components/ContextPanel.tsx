@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import useMoodDetection from '../hooks/useMoodDetection';
+import { useRealtimeState } from '../state/realtimeState';
 import StudyTimerPanel from './StudyTimerPanel';
 export type ContextPanelProps = {
   message: string;
@@ -35,6 +37,31 @@ export default function ContextPanel({
   onTimerReset,
 }: ContextPanelProps) {
   const mood = useMoodDetection();
+  const { updateStats } = useRealtimeState();
+  const lastSentAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (mood.status !== 'ready' || !mood.top) {
+      return;
+    }
+
+    const normalized = mood.top.label.trim().toLowerCase();
+    const roundedScore = Number((mood.top.score ?? 0).toFixed(3));
+    const detectionTimestamp = mood.updatedAt ?? Date.now();
+
+    if (lastSentAtRef.current === detectionTimestamp) {
+      return;
+    }
+
+    lastSentAtRef.current = detectionTimestamp;
+
+    updateStats({
+      mood: normalized,
+      focusLevel: Math.max(0, Math.round((mood.top.score ?? 0) * 10)),
+      confidence: roundedScore,
+    });
+  }, [mood, updateStats]);
+
   const isError = mood.status === 'error';
   const nextRunCountdown = formatDuration(mood.nextRunInMs);
 

@@ -199,6 +199,20 @@ db.exec(`
   );
 `);
 
+// Confidence per mood lives in a dedicated table so that each animation state can
+// carry its own score.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS mood_confidence (
+    mood TEXT PRIMARY KEY,
+    confidence REAL NOT NULL DEFAULT 0
+  );
+`);
+
+const ensureConfidenceRow = db.prepare(
+  `INSERT OR IGNORE INTO mood_confidence (mood, confidence) VALUES (?, 0)`
+);
+CAT_ANIMATION_STATES.forEach((state) => ensureConfidenceRow.run(state));
+
 db.exec(`
   INSERT OR IGNORE INTO user_stats (id, mood, room_temperature, focus_level, last_updated)
   VALUES (1, 'ok', 22.0, 5, datetime('now'));
@@ -210,11 +224,41 @@ export function getUserStats(): UserStatsRow {
     .get() as UserStatsRow;
 }
 
+export function getMoodConfidence(): Record<CatAnimationState, number> {
+  const rows = db
+    .prepare("SELECT mood, confidence FROM mood_confidence")
+    .all() as { mood: CatAnimationState; confidence: number }[];
+
+  const map = {} as Record<CatAnimationState, number>;
+  CAT_ANIMATION_STATES.forEach((state) => {
+    map[state] = 0;
+  });
+  rows.forEach((row) => {
+    map[row.mood] = row.confidence ?? 0;
+  });
+
+  return map;
+}
+
+export function updateMoodConfidence(
+  mood: CatAnimationState,
+  confidence: number
+) {
+  db.prepare(
+    `
+    INSERT INTO mood_confidence (mood, confidence)
+    VALUES (?, ?)
+    ON CONFLICT(mood) DO UPDATE SET confidence = excluded.confidence
+  `
+  ).run(mood, confidence);
+}
+
 export function updateUserStats(
   patch: Partial<{
     mood: string;
     room_temperature: number;
     focus_level: number;
+    confidence: number;
   }>
 ) {
   const current = getUserStats();
@@ -229,6 +273,10 @@ export function updateUserStats(
     WHERE id = 1
   `
   ).run(mood, room_temperature, focus_level);
+
+  if (patch.confidence !== undefined && isCatAnimationState(patch.mood)) {
+    updateMoodConfidence(patch.mood, patch.confidence);
+  }
 
   return getUserStats();
 }

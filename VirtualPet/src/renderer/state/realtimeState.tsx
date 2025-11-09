@@ -31,6 +31,7 @@ type UserStats = {
   mood: string;
   roomTemperature: number;
   focusLevel: number;
+  confidenceMap: Partial<Record<PetAnimationState, number>> | null;
   lastUpdated: string;
 };
 
@@ -49,6 +50,7 @@ type StatsUpdatePayload = Partial<{
   mood: string;
   room_temperature: number;
   focus_level: number;
+  confidence: number;
 }>;
 
 type ClientMessage =
@@ -76,6 +78,7 @@ type RealtimeContextValue = {
       mood?: string;
       roomTemperature?: number;
       focusLevel?: number;
+      confidence?: number;
     }>,
   ) => void;
 };
@@ -103,6 +106,10 @@ const DEFAULT_WS_URL = (() => {
 const VALID_CAT_STATES = new Set<PetAnimationState>(
   petAnimations.map((entry) => entry.state) as PetAnimationState[],
 );
+
+function isPetState(value: unknown): value is PetAnimationState {
+  return VALID_CAT_STATES.has(value as PetAnimationState);
+}
 
 const RealtimeContext = createContext<RealtimeContextValue | undefined>(
   undefined,
@@ -174,7 +181,20 @@ function toUserStats(payload: any): UserStats {
       ? payload.last_updated
       : new Date().toISOString();
 
-  return { mood, roomTemperature, focusLevel, lastUpdated };
+  const confidenceMap: Partial<Record<PetAnimationState, number>> | null =
+    payload && typeof payload === 'object' && payload.confidence_map
+      ? Object.entries(payload.confidence_map).reduce(
+          (acc, [key, value]) => {
+            if (isPetState(key) && typeof value === 'number') {
+              acc[key] = value;
+            }
+            return acc;
+          },
+          {} as Partial<Record<PetAnimationState, number>>,
+        )
+      : null;
+
+  return { mood, roomTemperature, focusLevel, confidenceMap, lastUpdated };
 }
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
@@ -331,6 +351,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       }
       if (patch.focusLevel !== undefined) {
         payload.focus_level = patch.focusLevel;
+      }
+      if (patch.confidence !== undefined) {
+        payload.confidence = patch.confidence;
       }
       sendMessage({ type: 'stats:update', payload });
     },

@@ -35,7 +35,7 @@ wss.on("connection", (ws) => {
     console.log("WS client connected");
     send(ws, { type: "cat:state", payload: (0, db_1.getCatState)() });
     send(ws, { type: "prefs:state", payload: (0, db_1.getUserPreferences)() });
-    send(ws, { type: "stats:state", payload: (0, db_1.getUserStats)() });
+    send(ws, { type: "stats:state", payload: buildStatsPayload() });
     ws.on("message", (raw) => {
         let msg;
         try {
@@ -78,12 +78,15 @@ wss.on("connection", (ws) => {
             }
             // --- User Stats ---
             case "stats:get": {
-                const stats = (0, db_1.getUserStats)();
-                return send(ws, { type: "stats:state", payload: stats });
+                return send(ws, { type: "stats:state", payload: buildStatsPayload() });
             }
             case "stats:update": {
-                const updated = (0, db_1.updateUserStats)(payload || {});
-                broadcast({ type: "stats:state", payload: updated });
+                const patch = payload || {};
+                if (typeof patch.confidence === "number") {
+                    lastConfidenceValue = patch.confidence;
+                }
+                (0, db_1.updateUserStats)(patch);
+                broadcast({ type: "stats:state", payload: buildStatsPayload() });
                 return;
             }
             default:
@@ -108,12 +111,21 @@ function broadcast(message) {
         }
     }
 }
+function buildStatsPayload() {
+    const stats = (0, db_1.getUserStats)();
+    const confidenceMap = (0, db_1.getMoodConfidence)();
+    const moodKey = stats.mood;
+    const mapConfidence = confidenceMap[moodKey] ?? 0;
+    const confidence = lastConfidenceValue ?? mapConfidence;
+    return { ...stats, confidence, confidence_map: confidenceMap };
+}
 server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
 let lastCatState = (0, db_1.getCatState)();
 let lastPrefs = (0, db_1.getUserPreferences)();
-let lastStats = (0, db_1.getUserStats)();
+let lastConfidenceValue = null;
+let lastStatsPayload = buildStatsPayload();
 function catStateChanged(prev, next) {
     return (prev.mood !== next.mood ||
         prev.energy !== next.energy ||
@@ -129,7 +141,9 @@ function statsChanged(prev, next) {
     return (prev.mood !== next.mood ||
         prev.room_temperature !== next.room_temperature ||
         prev.focus_level !== next.focus_level ||
-        prev.last_updated !== next.last_updated);
+        prev.confidence !== next.confidence ||
+        prev.last_updated !== next.last_updated ||
+        JSON.stringify(prev.confidence_map) !== JSON.stringify(next.confidence_map));
 }
 setInterval(() => {
     const nextCat = (0, db_1.getCatState)();
@@ -142,9 +156,10 @@ setInterval(() => {
         lastPrefs = nextPrefs;
         broadcast({ type: "prefs:state", payload: nextPrefs });
     }
-    const nextStats = (0, db_1.getUserStats)();
-    if (statsChanged(lastStats, nextStats)) {
-        lastStats = nextStats;
-        broadcast({ type: "stats:state", payload: nextStats });
+    const nextStatsPayload = buildStatsPayload();
+    if (statsChanged(lastStatsPayload, nextStatsPayload)) {
+        lastStatsPayload = nextStatsPayload;
+        lastConfidenceValue = nextStatsPayload.confidence ?? lastConfidenceValue;
+        broadcast({ type: "stats:state", payload: nextStatsPayload });
     }
 }, 1500);
