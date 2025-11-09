@@ -160,8 +160,8 @@ export default function PetScreen() {
 
   return (
     <div className="app-root">
-      <ClockDisplay />
       <div className={shellClassName.join(' ')}>
+        <ClockDisplay />
         <main className={layoutClassName.join(' ')}>
           <PetStage
             sprite={sprite}
@@ -170,10 +170,11 @@ export default function PetScreen() {
             isPetting={isPetting}
             disabled={isSleeping}
             hint={isSleeping ? '' : undefined}
+            narration={displayMessage}
           />
           {isSleeping ? null : (
             <ContextPanel
-              message={displayMessage}
+              message=""
               onTimerStart={handleTimerStart}
               onTimerPause={handleTimerPause}
               onTimerReset={handleTimerReset}

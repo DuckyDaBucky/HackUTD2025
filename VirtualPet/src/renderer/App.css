@@ -30,13 +30,12 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  position: relative;
 }
 
 .clock-widget {
   position: absolute;
-  top: 20px;
-  right: 28px;
+  top: 16px;
+  right: 20px;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
@@ -74,6 +73,7 @@ body {
   justify-content: space-between;
   padding: 32px;
   border-radius: 32px;
+  position: relative;
   backdrop-filter: blur(22px);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(23, 28, 41, 0.6));
   box-shadow:
@@ -187,6 +187,22 @@ body {
   cursor: default;
   -webkit-appearance: none;
   appearance: none;
+}
+
+.pet-narration {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(12, 14, 24, 0.72);
+  box-shadow: 0 12px 30px rgba(4, 6, 12, 0.4);
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(236, 240, 255, 0.92);
+  pointer-events: none;
 }
 
 .pet-stage .sprite-animator {

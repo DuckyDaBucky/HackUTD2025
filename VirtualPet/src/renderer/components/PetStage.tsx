@@ -8,6 +8,7 @@ export type PetStageProps = {
   onPet?: () => void;
   isPetting?: boolean;
   disabled?: boolean;
+  narration?: string;
 };
 
 type StageStyle = CSSProperties & {
@@ -21,6 +22,7 @@ export default function PetStage({
   onPet,
   isPetting = false,
   disabled = false,
+  narration,
 }: PetStageProps) {
   const stageStyle: StageStyle = backgroundSrc
     ? { '--stage-room': `url(${backgroundSrc})` }
@@ -52,6 +54,12 @@ export default function PetStage({
     stageClassName.push('sleep-locked');
   }
 
+  const narrationNode = narration ? (
+    <div className="pet-narration" aria-live="polite">
+      {narration}
+    </div>
+  ) : null;
+
   return (
     <section className="pet-panel" aria-label="Virtual pet">
       {onPet && !disabled ? (
@@ -61,6 +69,7 @@ export default function PetStage({
           style={stageStyle}
           onClick={onPet}
         >
+          {narrationNode}
           <SpriteAnimator
             key={src}
             src={src}
@@ -94,6 +103,7 @@ export default function PetStage({
           {!isPetting && hintText ? (
             <div className="pet-touch-hint">{hintText}</div>
           ) : null}
+          {narrationNode}
         </div>
       )}
     </section>
@@ -106,4 +116,5 @@ PetStage.defaultProps = {
   onPet: undefined,
   isPetting: false,
   disabled: false,
+  narration: undefined,
 } satisfies Partial<PetStageProps>;

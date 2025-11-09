@@ -48,7 +48,7 @@ export default function ContextPanel({
         />
 
         <div className="context-section">
-          <p className="context-message">{message}</p>
+          {message ? <p className="context-message">{message}</p> : null}
 
           <div className={`context-mood${isError ? ' is-error' : ''}`}>
             <span className="context-mood__title">Your mood</span>
