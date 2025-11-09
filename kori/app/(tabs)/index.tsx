@@ -3,67 +3,110 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Sprite } from '@/components/Sprite';
-import { catIdle } from '@/assets/sprites/generated/catIdle';
+import { DEFAULT_PET_STATE } from '@/constants/petAnimations';
+import { usePetAnimation } from '@/hooks/usePetAnimation';
+import { useRealtimeState } from '@/state/realtimeState';
 
-const MOOD_STATES = [
-  { label: 'Surprised', confidence: 74 },
-  { label: 'Playful', confidence: 81 },
-  { label: 'Sleepy', confidence: 66 },
-  { label: 'Curious', confidence: 72 },
-];
-
-const metrics = [
-  {
-    id: 'temperature',
-    label: 'Temperature',
-    value: '74 F',
-    status: 'Comfortable',
-    helper: 'Tap to switch units',
+const METRIC_CONFIG = {
+  comfortable: {
+    label: 'Comfortable',
     accent: '#4ADE80',
   },
-  {
-    id: 'humidity',
-    label: 'Humidity',
-    value: '43%',
-    status: 'Comfortable',
-    helper: 'Ideal: 40% - 50%',
-    accent: '#34D399',
-  },
-  {
-    id: 'airQuality',
-    label: 'Air Quality',
-    value: '130',
-    status: 'Sensitive',
-    helper: 'PM2.5 45 ug/m3, CO2 850 ppm',
+  warning: {
+    label: 'Needs attention',
     accent: '#F97316',
   },
-  {
-    id: 'barometric',
-    label: 'Barometric',
-    value: '1013',
-    status: 'Stable',
-    helper: 'Sea level reference',
-    accent: '#60A5FA',
-  },
-];
+};
+
+function formatUpdated(timestamp?: string) {
+  if (!timestamp) {
+    return 'Just now';
+  }
+  const updated = new Date(timestamp).getTime();
+  if (Number.isNaN(updated)) {
+    return 'Just now';
+  }
+  const diff = Date.now() - updated;
+  if (diff < 45_000) {
+    return 'Just now';
+  }
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+  const hours = Math.round(minutes / 60);
+  return `${hours} hr ago`;
+}
+
+function toTitleCase(value: string) {
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const frameCount = useMemo(() => catIdle.frames.length, []);
+  const { status, cat, stats, error } = useRealtimeState();
+  const activeMood = cat?.mood ?? DEFAULT_PET_STATE;
+  const { animation } = usePetAnimation(activeMood);
+
+  const frameCount = useMemo(() => animation.sheet.frames.length || 1, [animation]);
   const [frameIndex, setFrameIndex] = useState(0);
-  const mood = MOOD_STATES[0];
 
   useEffect(() => {
+    setFrameIndex(0);
     if (frameCount <= 1) {
       return undefined;
     }
 
+    const frameDuration = 1000 / animation.fps;
     const interval = setInterval(() => {
       setFrameIndex((prev) => (prev + 1) % frameCount);
-    }, 180);
+    }, frameDuration);
 
     return () => clearInterval(interval);
-  }, [frameCount]);
+  }, [animation, frameCount]);
+
+  const confidence = Math.round(cat?.energy ?? 72);
+  const hunger = Math.round(cat?.hunger ?? 15);
+  const temperature = stats?.roomTemperature ?? 22;
+  const focus = stats?.focusLevel ?? 5;
+
+  const metrics = [
+    {
+      id: 'temperature',
+      label: 'Temperature',
+      value: `${Math.round(temperature)} °C`,
+      status: temperature >= 18 && temperature <= 24 ? METRIC_CONFIG.comfortable.label : METRIC_CONFIG.warning.label,
+      helper: 'Tap to switch units',
+      accent: METRIC_CONFIG.comfortable.accent,
+    },
+    {
+      id: 'energy',
+      label: 'Energy',
+      value: `${confidence}%`,
+      status: confidence > 60 ? METRIC_CONFIG.comfortable.label : METRIC_CONFIG.warning.label,
+      helper: 'Tracks companion stamina',
+      accent: '#34D399',
+    },
+    {
+      id: 'focus',
+      label: 'Focus Level',
+      value: `${focus}/10`,
+      status: focus >= 6 ? 'Engaged' : 'Wandering',
+      helper: 'Higher suggests better study flow',
+      accent: '#F97316',
+    },
+    {
+      id: 'hunger',
+      label: 'Hunger',
+      value: `${hunger}%`,
+      status: hunger <= 40 ? METRIC_CONFIG.comfortable.label : METRIC_CONFIG.warning.label,
+      helper: 'Lower is better — offer snacks if high',
+      accent: '#60A5FA',
+    },
+  ];
 
   return (
     <ScrollView
@@ -74,6 +117,10 @@ export default function HomeScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.appTitle}>Ambient Companion</Text>
         <Text style={styles.subtitle}>VirtualPet energy. Mobile senses.</Text>
+        <Text style={styles.statusText}>
+          {status === 'connected' ? 'Live link active' : status === 'connecting' ? 'Connecting…' : 'Offline mode'}
+          {error ? ` · ${error}` : ''}
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -82,25 +129,24 @@ export default function HomeScreen() {
             <View>
               <Text style={styles.cardTitle}>Cat Habitat</Text>
               <View style={styles.pill}>
-                <Text style={styles.pillText}>{mood.label.toUpperCase()}</Text>
+                <Text style={styles.pillText}>{toTitleCase(activeMood).toUpperCase()}</Text>
               </View>
             </View>
             <View style={styles.spriteShell}>
-              <Sprite sheet={catIdle} frameIndex={frameIndex} scale={3} />
+              <Sprite sheet={animation.sheet} frameIndex={frameIndex} scale={3} />
             </View>
           </View>
 
           <View style={styles.cardStatsRow}>
             <View style={styles.statBlock}>
               <Text style={styles.statLabel}>Confidence</Text>
-              <Text style={styles.statValue}>{mood.confidence}%</Text>
+              <Text style={styles.statValue}>{confidence}%</Text>
             </View>
             <View style={styles.statBlock}>
               <Text style={styles.statLabel}>Updated</Text>
-              <Text style={styles.statValue}>Just now</Text>
+              <Text style={styles.statValue}>{formatUpdated(cat?.lastUpdated)}</Text>
             </View>
           </View>
-
         </View>
 
         {metrics.map((metric) => (
@@ -119,9 +165,9 @@ export default function HomeScreen() {
 
         <View style={styles.emotionCard}>
           <Text style={styles.emotionBadge}>Live emotion feed</Text>
-          <Text style={styles.emotionLabel}>Fearful</Text>
-          <Text style={styles.emotionConfidence}>93% Confidence</Text>
-          <Text style={styles.metricHelper}>Updated just now</Text>
+          <Text style={styles.emotionLabel}>{toTitleCase(stats?.mood ?? 'Fearful')}</Text>
+          <Text style={styles.emotionConfidence}>{`${confidence}% Confidence`}</Text>
+          <Text style={styles.metricHelper}>Updated {formatUpdated(stats?.lastUpdated)}</Text>
         </View>
       </View>
     </ScrollView>
@@ -147,6 +193,11 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     letterSpacing: 1,
     textTransform: 'uppercase',
+    fontSize: 12,
+  },
+  statusText: {
+    marginTop: 6,
+    color: '#6B7280',
     fontSize: 12,
   },
   section: {
@@ -246,6 +297,7 @@ const styles = StyleSheet.create({
   metricHelper: {
     color: '#6B7280',
     fontSize: 12,
+    lineHeight: 18,
   },
   metricBar: {
     height: 4,

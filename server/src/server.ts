@@ -48,6 +48,10 @@ wss.on("connection", (ws) => {
   clients.add(ws);
   console.log("WS client connected");
 
+  send(ws, { type: "cat:state", payload: getCatState() });
+  send(ws, { type: "prefs:state", payload: getUserPreferences() });
+  send(ws, { type: "stats:state", payload: getUserStats() });
+
   ws.on("message", (raw) => {
     let msg: any;
     try {
@@ -138,3 +142,62 @@ function broadcast(message: any) {
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+let lastCatState = getCatState();
+let lastPrefs = getUserPreferences();
+let lastStats = getUserStats();
+
+function catStateChanged(
+  prev: ReturnType<typeof getCatState>,
+  next: typeof prev
+) {
+  return (
+    prev.mood !== next.mood ||
+    prev.energy !== next.energy ||
+    prev.hunger !== next.hunger ||
+    prev.last_updated !== next.last_updated
+  );
+}
+
+function prefsChanged(
+  prev: ReturnType<typeof getUserPreferences>,
+  next: typeof prev
+) {
+  return (
+    prev.is_student !== next.is_student ||
+    prev.theme !== next.theme ||
+    prev.last_updated !== next.last_updated
+  );
+}
+
+function statsChanged(
+  prev: ReturnType<typeof getUserStats>,
+  next: typeof prev
+) {
+  return (
+    prev.mood !== next.mood ||
+    prev.room_temperature !== next.room_temperature ||
+    prev.focus_level !== next.focus_level ||
+    prev.last_updated !== next.last_updated
+  );
+}
+
+setInterval(() => {
+  const nextCat = getCatState();
+  if (catStateChanged(lastCatState, nextCat)) {
+    lastCatState = nextCat;
+    broadcast({ type: "cat:state", payload: nextCat });
+  }
+
+  const nextPrefs = getUserPreferences();
+  if (prefsChanged(lastPrefs, nextPrefs)) {
+    lastPrefs = nextPrefs;
+    broadcast({ type: "prefs:state", payload: nextPrefs });
+  }
+
+  const nextStats = getUserStats();
+  if (statsChanged(lastStats, nextStats)) {
+    lastStats = nextStats;
+    broadcast({ type: "stats:state", payload: nextStats });
+  }
+}, 1500);

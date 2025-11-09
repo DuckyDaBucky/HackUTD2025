@@ -33,6 +33,9 @@ const clients = new Set();
 wss.on("connection", (ws) => {
     clients.add(ws);
     console.log("WS client connected");
+    send(ws, { type: "cat:state", payload: (0, db_1.getCatState)() });
+    send(ws, { type: "prefs:state", payload: (0, db_1.getUserPreferences)() });
+    send(ws, { type: "stats:state", payload: (0, db_1.getUserStats)() });
     ws.on("message", (raw) => {
         let msg;
         try {
@@ -56,7 +59,9 @@ wss.on("connection", (ws) => {
                     broadcast({ type: "cat:state", payload: updated });
                 }
                 catch (error) {
-                    const message = error instanceof Error ? error.message : "Failed to update cat state";
+                    const message = error instanceof Error
+                        ? error.message
+                        : "Failed to update cat state";
                     send(ws, { type: "error", payload: message });
                 }
                 return;
@@ -106,3 +111,40 @@ function broadcast(message) {
 server.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
+let lastCatState = (0, db_1.getCatState)();
+let lastPrefs = (0, db_1.getUserPreferences)();
+let lastStats = (0, db_1.getUserStats)();
+function catStateChanged(prev, next) {
+    return (prev.mood !== next.mood ||
+        prev.energy !== next.energy ||
+        prev.hunger !== next.hunger ||
+        prev.last_updated !== next.last_updated);
+}
+function prefsChanged(prev, next) {
+    return (prev.is_student !== next.is_student ||
+        prev.theme !== next.theme ||
+        prev.last_updated !== next.last_updated);
+}
+function statsChanged(prev, next) {
+    return (prev.mood !== next.mood ||
+        prev.room_temperature !== next.room_temperature ||
+        prev.focus_level !== next.focus_level ||
+        prev.last_updated !== next.last_updated);
+}
+setInterval(() => {
+    const nextCat = (0, db_1.getCatState)();
+    if (catStateChanged(lastCatState, nextCat)) {
+        lastCatState = nextCat;
+        broadcast({ type: "cat:state", payload: nextCat });
+    }
+    const nextPrefs = (0, db_1.getUserPreferences)();
+    if (prefsChanged(lastPrefs, nextPrefs)) {
+        lastPrefs = nextPrefs;
+        broadcast({ type: "prefs:state", payload: nextPrefs });
+    }
+    const nextStats = (0, db_1.getUserStats)();
+    if (statsChanged(lastStats, nextStats)) {
+        lastStats = nextStats;
+        broadcast({ type: "stats:state", payload: nextStats });
+    }
+}, 1500);

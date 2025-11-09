@@ -1,31 +1,15 @@
-import { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const FEATURE_FLAGS = [
-  { id: 'alerts', label: 'Ambient alerts', helper: 'Notify me when readings drift outside comfort range.' },
-  { id: 'moodPush', label: 'Mood push updates', helper: 'Send quick push notes when the cat mood shifts.' },
-  { id: 'lowPower', label: 'Low power visuals', helper: 'Reduce animation cadence when battery is below 20%.' },
-];
-
-const ACCESSIBILITY = [
-  { id: 'highContrast', label: 'High-contrast HUD', helper: 'Boost contrast for dim lighting environments.' },
-  { id: 'reduceMotion', label: 'Reduce motion', helper: 'Slow down or pause idle animations automatically.' },
-];
+import { useRealtimeState } from '@/state/realtimeState';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const [toggles, setToggles] = useState<Record<string, boolean>>({
-    alerts: true,
-    moodPush: false,
-    lowPower: false,
-    highContrast: false,
-    reduceMotion: false,
-  });
+  const { preferences, updatePreferences, stats, updateStats } = useRealtimeState();
 
-  const handleToggle = (id: string) => {
-    setToggles((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  const isStudent = preferences?.isStudent ?? false;
+  const isDark = (preferences?.theme ?? 'light') === 'dark';
+  const reduceMotion = stats?.focusLevel !== undefined ? stats.focusLevel < 4 : false;
 
   return (
     <ScrollView
@@ -37,39 +21,47 @@ export default function SettingsScreen() {
       <Text style={styles.subtitle}>Tune alerts, visuals, and accessibility for your ambient companion.</Text>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notifications</Text>
-        {FEATURE_FLAGS.map((item) => (
-          <View key={item.id} style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>{item.label}</Text>
-              <Text style={styles.rowHelper}>{item.helper}</Text>
-            </View>
-            <Switch
-              value={toggles[item.id]}
-              onValueChange={() => handleToggle(item.id)}
-              thumbColor={toggles[item.id] ? '#60A5FA' : '#1F2937'}
-              trackColor={{ false: '#111827', true: '#1E3A8A' }}
-            />
+        <Text style={styles.sectionTitle}>Preferences</Text>
+        <View style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowLabel}>Student mode</Text>
+            <Text style={styles.rowHelper}>Blend study timers, breaks, and encouragement.</Text>
           </View>
-        ))}
+          <Switch
+            value={isStudent}
+            onValueChange={(next) => updatePreferences({ isStudent: next })}
+            thumbColor={isStudent ? '#60A5FA' : '#1F2937'}
+            trackColor={{ false: '#111827', true: '#1E3A8A' }}
+          />
+        </View>
+        <View style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowLabel}>Dark interface</Text>
+            <Text style={styles.rowHelper}>Match the desktop aesthetic and dim bright surfaces.</Text>
+          </View>
+          <Switch
+            value={isDark}
+            onValueChange={(next) => updatePreferences({ theme: next ? 'dark' : 'light' })}
+            thumbColor={isDark ? '#FDE68A' : '#1F2937'}
+            trackColor={{ false: '#111827', true: '#92400E' }}
+          />
+        </View>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Accessibility</Text>
-        {ACCESSIBILITY.map((item) => (
-          <View key={item.id} style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowLabel}>{item.label}</Text>
-              <Text style={styles.rowHelper}>{item.helper}</Text>
-            </View>
-            <Switch
-              value={toggles[item.id]}
-              onValueChange={() => handleToggle(item.id)}
-              thumbColor={toggles[item.id] ? '#34D399' : '#1F2937'}
-              trackColor={{ false: '#111827', true: '#065F46' }}
-            />
+        <View style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.rowLabel}>Reduce motion</Text>
+            <Text style={styles.rowHelper}>Tone down idle loops when focus level drops.</Text>
           </View>
-        ))}
+          <Switch
+            value={reduceMotion}
+            onValueChange={(next) => updateStats({ focusLevel: next ? 3 : 6 })}
+            thumbColor={reduceMotion ? '#34D399' : '#1F2937'}
+            trackColor={{ false: '#111827', true: '#065F46' }}
+          />
+        </View>
       </View>
     </ScrollView>
   );
