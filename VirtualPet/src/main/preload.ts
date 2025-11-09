@@ -27,12 +27,22 @@ const electronHandler = {
 
 const emotionAPI = {
   detectEmotion(imageDataUrl: string) {
-    return ipcRenderer.invoke('emotion:detect', imageDataUrl) as Promise<EmotionDetectionResponse>;
+    return ipcRenderer.invoke(
+      'emotion:detect',
+      imageDataUrl,
+    ) as Promise<EmotionDetectionResponse>;
   },
+};
+
+const EXPOSED_ENV = {
+  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GEMINI_MODEL: process.env.GEMINI_MODEL,
 };
 
 contextBridge.exposeInMainWorld('electron', electronHandler);
 contextBridge.exposeInMainWorld('emotionAPI', emotionAPI);
+contextBridge.exposeInMainWorld('env', EXPOSED_ENV);
 
 export type ElectronHandler = typeof electronHandler;
 export type EmotionAPI = typeof emotionAPI;

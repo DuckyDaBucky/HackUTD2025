@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+
+/**
+ * Converts sprite sheet PNG assets into JSON data consumable by the Sprite component.
+ * Each pixel with non-zero alpha becomes an entry in the generated TypeScript module.
+ */
+
+const fs = require('fs');
+const path = require('path');
+// Depend on the Expo app's pngjs installation to avoid duplicating packages at repo root.
+// eslint-disable-next-line import/no-dynamic-require, global-require
+const { PNG } = require(path.join(__dirname, '..', 'kori', 'node_modules', 'pngjs'));
+
+const projectRoot = path.resolve(__dirname, '..');
+
+const sprites = [
+  {
+    name: 'idle',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_idle.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/idle.ts'),
+  },
+  {
+    name: 'idleAlt',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_idle2.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/idleAlt.ts'),
+  },
+  {
+    name: 'sleep',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_sleep.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/sleep.ts'),
+  },
+  {
+    name: 'sleepy',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_sleepy.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/sleepy.ts'),
+  },
+  {
+    name: 'excited',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_excited.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/excited.ts'),
+  },
+  {
+    name: 'surprised',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_surprised.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/surprised.ts'),
+  },
+  {
+    name: 'sad',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_sad.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/sad.ts'),
+  },
+  {
+    name: 'waiting',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_waiting.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/waiting.ts'),
+  },
+  {
+    name: 'layDown',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_laydown.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/layDown.ts'),
+  },
+  {
+    name: 'shy',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_shy.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/shy.ts'),
+  },
+  {
+    name: 'dance',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_dance.png'),
+    frameWidth: 32,
+    frameHeight: 32,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/dance.ts'),
+  },
+  {
+    name: 'sleepingAlt',
+    input: path.join(projectRoot, 'kori/assets/sprites/source/cat_sleeping.png'),
+    frameWidth: 48,
+    frameHeight: 48,
+    output: path.join(projectRoot, 'kori/assets/sprites/generated/sleepingAlt.ts'),
+  },
+];
+
+function rgbaToHex(r, g, b) {
+  return `#${[r, g, b]
+    .map((v) => {
+      const hex = v.toString(16);
+      return hex.length === 1 ? `0${hex}` : hex;
+    })
+    .join('')}`;
+}
+
+function buildSpriteData({ name, input, frameWidth, frameHeight, output }) {
+  if (!fs.existsSync(input)) {
+    throw new Error(`Missing input sprite sheet: ${input}`);
+  }
+
+  const png = PNG.sync.read(fs.readFileSync(input));
+  const { width, height, data } = png;
+
+  if (height !== frameHeight) {
+    throw new Error(
+      `Unexpected sprite height for ${name}. Got ${height}, expected frameHeight ${frameHeight}`,
+    );
+  }
+
+  if (width % frameWidth !== 0) {
+    throw new Error(
+      `Sprite width ${width} is not divisible by frame width ${frameWidth} for ${name}`,
+    );
+  }
+
+  const frameCount = Math.floor(width / frameWidth);
+  const frames = Array.from({ length: frameCount }, () => []);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = (width * y + x) << 2;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
+
+      if (a === 0) {
+        continue;
+      }
+
+      const frameIndex = Math.floor(x / frameWidth);
+      const frameX = x - frameIndex * frameWidth;
+      const opacity = +(a / 255).toFixed(3);
+
+      frames[frameIndex].push({
+        x: frameX,
+        y,
+        color: rgbaToHex(r, g, b),
+        opacity,
+      });
+    }
+  }
+
+  const outDir = path.dirname(output);
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true });
+  }
+
+  const fileContent = `// AUTO-GENERATED by scripts/generate-sprite-data.js\n` +
+    `import type { SpriteSheetData } from '../../../components/SpriteTypes';\n\n` +
+    `export const ${name}: SpriteSheetData = ${JSON.stringify(
+      {
+        frameWidth,
+        frameHeight,
+        frames,
+      },
+      null,
+      2,
+    )} as const;\n`;
+
+  fs.writeFileSync(output, fileContent);
+  console.log(`Generated sprite data: ${output}`);
+}
+
+function main() {
+  sprites.forEach((sprite) => buildSpriteData(sprite));
+}
+
+main();
+

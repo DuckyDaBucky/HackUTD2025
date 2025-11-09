@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useStudyTimer, type TimerMode } from '../hooks/useStudyTimer';
+import { useRealtimeState } from '../state/realtimeState';
 
 const MODE_LABELS: Record<TimerMode, string> = {
   pomodoro: 'Pomodoro',
@@ -65,6 +66,15 @@ export default function StudyTimerPanel({
 }: StudyTimerPanelProps) {
   const timer = useStudyTimer();
   const isRunning = timer.status === 'running';
+  const { preferences } = useRealtimeState();
+  const isStudent = preferences?.isStudent ?? false;
+
+  useEffect(() => {
+    const remoteMode = preferences?.timerMethod ?? 'pomodoro';
+    if (remoteMode !== timer.mode) {
+      timer.switchMode(remoteMode);
+    }
+  }, [preferences?.timerMethod, timer]);
 
   const handleStart = () => {
     if (isRunning) return;
@@ -83,12 +93,19 @@ export default function StudyTimerPanel({
     onReset();
   };
 
+  const phaseLabel = useMemo(() => {
+    if (timer.phase === 'work') {
+      return isStudent ? 'Study' : 'Work';
+    }
+    return timer.label;
+  }, [isStudent, timer.label, timer.phase]);
+
   return (
     <section className="study-timer" aria-label="Study timer">
       <header className="study-timer__header">
         <div>
           <span className="study-timer__mode">{MODE_LABELS[timer.mode]}</span>
-          <span className="study-timer__phase">{timer.label}</span>
+          <span className="study-timer__phase">{phaseLabel}</span>
         </div>
         <span className="study-timer__status">{formatStatus(timer.status)}</span>
       </header>

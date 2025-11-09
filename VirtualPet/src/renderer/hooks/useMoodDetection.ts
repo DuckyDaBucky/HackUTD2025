@@ -13,7 +13,7 @@ type MoodState = {
 };
 
 const DEFAULT_SIZE = 224;
-const DEFAULT_INTERVAL_MS = 20000;
+const DEFAULT_INTERVAL_MS = 20000; // mood interval in milliseconds
 
 const captureConstraints: MediaStreamConstraints = {
   video: {
@@ -28,7 +28,9 @@ const clampMs = (value?: number) => {
   return Math.max(value, 0);
 };
 
-export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
+export default function useMoodDetection(
+  intervalMs = DEFAULT_INTERVAL_MS,
+): MoodState {
   const [state, setState] = useState<MoodState>({ status: 'idle' });
   const detectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -63,11 +65,15 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
       }
     };
 
+    const remainingMs = (): number | undefined =>
+      nextRunAtRef.current != null
+        ? nextRunAtRef.current - Date.now()
+        : undefined;
+
     const updateCountdown = () => {
-      const nextRunAt = nextRunAtRef.current;
       setState((prev) => ({
         ...prev,
-        nextRunInMs: clampMs(nextRunAt ? nextRunAt - Date.now() : undefined),
+        nextRunInMs: clampMs(remainingMs()),
       }));
     };
 
@@ -118,7 +124,7 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
             ...prev,
             status: 'error',
             error: response.error,
-            nextRunInMs: clampMs(nextRunAtRef.current && nextRunAtRef.current - Date.now()),
+            nextRunInMs: clampMs(remainingMs()),
           }));
         } else {
           setState({
@@ -126,7 +132,7 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
             top: response.top,
             scores: response.all.slice(0, 4),
             updatedAt: Date.now(),
-            nextRunInMs: clampMs(nextRunAtRef.current && nextRunAtRef.current - Date.now()),
+            nextRunInMs: clampMs(remainingMs()),
           });
         }
       } catch (error) {
@@ -136,7 +142,7 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
           ...prev,
           status: 'error',
           error: message,
-          nextRunInMs: clampMs(nextRunAtRef.current && nextRunAtRef.current - Date.now()),
+          nextRunInMs: clampMs(remainingMs()),
         }));
       } finally {
         detecting = false;
@@ -179,7 +185,7 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
       }
     };
 
-    void init();
+    init().catch(() => undefined);
 
     return () => {
       cancelled = true;

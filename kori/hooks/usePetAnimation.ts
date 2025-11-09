@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import {
   DEFAULT_PET_STATE,
   getPetAnimation,
   petAnimations,
   type PetAnimationState,
-} from '../constants/petAnimations';
+} from '@/constants/petAnimations';
 
 export type UsePetAnimationResult = {
   state: PetAnimationState;
@@ -16,7 +17,11 @@ export type UsePetAnimationResult = {
 export function usePetAnimation(
   initialState: PetAnimationState = DEFAULT_PET_STATE,
 ): UsePetAnimationResult {
-  const [state, setState] = useState(initialState);
+  const [state, setState] = useState<PetAnimationState>(initialState);
+
+  useEffect(() => {
+    setState((current) => (current === initialState ? current : initialState));
+  }, [initialState]);
 
   const animation = useMemo(() => getPetAnimation(state), [state]);
 
@@ -54,3 +59,5 @@ export function usePetAnimation(
     togglePetAnimation,
   };
 }
+
+

@@ -1,4 +1,6 @@
-import { useMoodDetection } from '../hooks/useMoodDetection';
+import { type CSSProperties, useEffect, useMemo, useRef } from 'react';
+import useMoodDetection from '../hooks/useMoodDetection';
+import { useRealtimeState } from '../state/realtimeState';
 import StudyTimerPanel from './StudyTimerPanel';
 export type ContextPanelProps = {
   message: string;
@@ -28,6 +30,27 @@ const formatDuration = (ms?: number) => {
   return `${totalSeconds}s`;
 };
 
+const tipCardStyle: CSSProperties = {
+  backgroundColor: '#0C142C',
+  borderRadius: 16,
+  padding: '12px 16px',
+  border: '1px solid rgba(148, 163, 184, 0.12)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+};
+
+const tipTitleStyle: CSSProperties = {
+  fontSize: 12,
+  textTransform: 'uppercase',
+  color: '#CBD5F5',
+};
+
+const tipBodyStyle: CSSProperties = {
+  color: '#E5E7EB',
+  lineHeight: 1.4,
+};
+
 export default function ContextPanel({
   message,
   onTimerStart,
@@ -35,6 +58,41 @@ export default function ContextPanel({
   onTimerReset,
 }: ContextPanelProps) {
   const mood = useMoodDetection();
+  const { stats, updateStats } = useRealtimeState();
+  const lastDetectionTimestampRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (mood.status !== 'ready' || !mood.top) {
+      return;
+    }
+
+    const normalized = mood.top.label.trim().toLowerCase();
+    const roundedScore = Number((mood.top.score ?? 0).toFixed(3));
+    const detectionTimestamp = mood.updatedAt ?? Date.now();
+
+    if (lastDetectionTimestampRef.current === detectionTimestamp) {
+      return;
+    }
+
+    lastDetectionTimestampRef.current = detectionTimestamp;
+
+    updateStats({
+      mood: normalized,
+      focusLevel: Math.max(0, Math.round((mood.top.score ?? 0) * 10)),
+      confidence: roundedScore,
+    });
+  }, [mood, updateStats]);
+
+  const tipText = useMemo(() => {
+    if (!stats) {
+      return 'Tips appear once enough data is collected.';
+    }
+    if (stats.dailyTip && stats.dailyTip.trim().length > 0) {
+      return stats.dailyTip.trim();
+    }
+    return 'We will share focused advice as soon as fresh mood data arrives.';
+  }, [stats]);
+
   const isError = mood.status === 'error';
   const nextRunCountdown = formatDuration(mood.nextRunInMs);
 
@@ -78,6 +136,13 @@ export default function ContextPanel({
                 ? ` · Last check ${formatTime(mood.updatedAt)}`
                 : ''}
             </span>
+          </div>
+        </div>
+
+        <div className="context-section">
+          <div className="context-tip" style={tipCardStyle}>
+            <span style={tipTitleStyle}>Tip of the day</span>
+            <span style={tipBodyStyle}>{tipText}</span>
           </div>
         </div>
       </div>

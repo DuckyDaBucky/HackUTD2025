@@ -1,19 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import baseRoomBackdrop from '../../../assets/CatRoomPaid/ExampleRooms/ExampleRoom 2.png';
 import ContextPanel from './ContextPanel';
 import PetStage from './PetStage';
 import ClockDisplay from './ClockDisplay';
-import { usePetAnimation } from '../hooks/usePetAnimation';
 import {
+  DEFAULT_PET_STATE,
   getPetAnimation,
   type PetAnimationDefinition,
+  type PetAnimationState,
 } from '../constants/petAnimations';
+import { useRealtimeState } from '../state/realtimeState';
 // import catSleepingBackdrop from '../../../assets/CatRoomPaid/CatSleeping.png';
 
 type OptionTemplate = {
   label: string;
   variant?: 'primary' | 'secondary';
-  targetState?: string;
+  targetState?: PetAnimationState;
 };
 
 export type OptionSet = {
@@ -45,18 +47,35 @@ const optionSets: OptionSet[] = [
   },
 ];
 
+const IDLE_VARIANTS: PetAnimationState[] = ['idle', 'idle-alt', 'waiting', 'excited'];
+
 export default function PetScreen() {
   const currentSet = optionSets[0];
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { animation: activeAnimation, togglePetAnimation } = usePetAnimation();
+  const previousMoodRef = useRef<PetAnimationState | null>(null);
+  const { cat, updateCat, status, stats } = useRealtimeState();
   const [petOverride, setPetOverride] = useState<PetAnimationDefinition | null>(
     null,
   );
-  const [isSleeping, setIsSleeping] = useState(false);
+  const remoteMood = cat?.mood ?? DEFAULT_PET_STATE;
+  const idleVariantRef = useRef<PetAnimationState>('idle');
+  const idleResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const activeAnimation = useMemo(
+    () => getPetAnimation(remoteMood),
+    [remoteMood],
+  );
+  const isMusicPlaying = stats?.musicIsPlaying ?? false;
+  const currentTrack = stats?.musicTrack ?? null;
+  const isSleeping =
+    !isMusicPlaying &&
+    ['sleep', 'sleeping', 'sleeping-alt'].includes(remoteMood);
 
   const isPetting = petOverride !== null;
 
-  const displayedAnimation = petOverride ?? activeAnimation;
+  const displayedAnimation = isMusicPlaying
+    ? getPetAnimation('dance')
+    : petOverride ?? activeAnimation;
 
   const sprite = {
     src: displayedAnimation.animationSrc,
@@ -68,6 +87,17 @@ export default function PetScreen() {
   } as const;
 
   const displayMessage = (() => {
+    if (status !== 'connected') {
+      return 'Connecting to your study buddy...';
+    }
+
+    if (isMusicPlaying) {
+      if (currentTrack) {
+        return `Vibing to ${currentTrack}.`;
+      }
+      return 'Grooving to your playlist.';
+    }
+
     if (isPetting) {
       return 'The pet looks a bit shy but loves the attention!';
     }
@@ -86,28 +116,34 @@ export default function PetScreen() {
       clearTimeout(revertTimerRef.current);
     }
 
+    previousMoodRef.current = remoteMood;
+
+    updateCat({ mood: 'shy' });
     setPetOverride(getPetAnimation('shy'));
 
     revertTimerRef.current = setTimeout(() => {
       setPetOverride(null);
       revertTimerRef.current = null;
+      const fallbackMood = previousMoodRef.current ?? DEFAULT_PET_STATE;
+      updateCat({ mood: fallbackMood });
+      previousMoodRef.current = null;
     }, 1200);
   };
 
   const handleToggleSleep = () => {
-    if (isSleeping) {
-      setIsSleeping(false);
-      setPetOverride(null);
-      return;
-    }
-
     if (revertTimerRef.current) {
       clearTimeout(revertTimerRef.current);
       revertTimerRef.current = null;
     }
 
     setPetOverride(null);
-    setIsSleeping(true);
+
+    if (isSleeping) {
+      updateCat({ mood: DEFAULT_PET_STATE });
+      return;
+    }
+
+    updateCat({ mood: 'sleeping' });
   };
 
   useEffect(() => {
@@ -117,14 +153,51 @@ export default function PetScreen() {
         revertTimerRef.current = null;
         setPetOverride(null);
       }
+      if (idleResetRef.current) {
+        clearTimeout(idleResetRef.current);
+        idleResetRef.current = null;
+      }
     };
   }, []);
 
   useEffect(() => {
-    if (isSleeping) {
-      setPetOverride(getPetAnimation('sleeping'));
+    if (isMusicPlaying || remoteMood !== 'idle') {
+      return;
     }
-  }, [isSleeping]);
+
+    const options = IDLE_VARIANTS.filter((variant) => variant !== idleVariantRef.current);
+    const nextVariant = options.length
+      ? options[Math.floor(Math.random() * options.length)]
+      : idleVariantRef.current;
+    idleVariantRef.current = nextVariant;
+    updateCat({ mood: nextVariant });
+  }, [remoteMood, updateCat, isMusicPlaying]);
+
+  useEffect(() => {
+    if (
+      isMusicPlaying ||
+      !IDLE_VARIANTS.includes(remoteMood) ||
+      remoteMood === 'idle'
+    ) {
+      return;
+    }
+
+    if (idleResetRef.current) {
+      clearTimeout(idleResetRef.current);
+    }
+
+    idleResetRef.current = setTimeout(() => {
+      updateCat({ mood: 'idle' });
+      idleResetRef.current = null;
+    }, 6000);
+
+    return () => {
+      if (idleResetRef.current) {
+        clearTimeout(idleResetRef.current);
+        idleResetRef.current = null;
+      }
+    };
+  }, [remoteMood, updateCat, isMusicPlaying]);
 
   const roomBackdrop = isSleeping ? baseRoomBackdrop : baseRoomBackdrop;
   const shellClassName = ['pet-shell'];
@@ -140,22 +213,26 @@ export default function PetScreen() {
     layoutClassName.push('sleep-focus');
   }
 
-  const focusState = currentSet.options[1].targetState ?? 'waiting';
-  const breakState = currentSet.options[0].targetState ?? 'excited';
+  const fallbackFocusState: PetAnimationState = 'waiting';
+  const fallbackBreakState: PetAnimationState = 'excited';
+  const focusState: PetAnimationState =
+    currentSet.options[1].targetState ?? fallbackFocusState;
+  const breakState: PetAnimationState =
+    currentSet.options[0].targetState ?? fallbackBreakState;
 
   const handleTimerStart = () => {
     if (isSleeping) return;
-    togglePetAnimation(focusState);
+    updateCat({ mood: focusState });
   };
 
   const handleTimerPause = () => {
     if (isSleeping) return;
-    togglePetAnimation(breakState);
+    updateCat({ mood: breakState });
   };
 
   const handleTimerReset = () => {
     if (isSleeping) return;
-    togglePetAnimation('idle');
+    updateCat({ mood: DEFAULT_PET_STATE });
   };
 
   return (
