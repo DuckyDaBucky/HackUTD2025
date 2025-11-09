@@ -1,0 +1,162 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getItems = getItems;
+exports.createItem = createItem;
+exports.getCatState = getCatState;
+exports.updateCatState = updateCatState;
+exports.getUserPreferences = getUserPreferences;
+exports.updateUserPreferences = updateUserPreferences;
+exports.getUserStats = getUserStats;
+exports.updateUserStats = updateUserStats;
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const CAT_ANIMATION_STATES = [
+    "idle",
+    "idle-alt",
+    "sleep",
+    "sleepy",
+    "excited",
+    "surprised",
+    "sad",
+    "waiting",
+    "laydown",
+    "shy",
+    "sleeping",
+    "sleeping-alt",
+];
+function isCatAnimationState(value) {
+    return (typeof value === "string" &&
+        CAT_ANIMATION_STATES.includes(value));
+}
+const dataDir = path_1.default.join(process.cwd(), "data");
+fs_1.default.mkdirSync(dataDir, { recursive: true });
+const db = new better_sqlite3_1.default(path_1.default.join(dataDir, "data.sqlite"));
+db.pragma("journal_mode = WAL");
+// Items demo table (existing)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+function getItems() {
+    return db
+        .prepare("SELECT * FROM items ORDER BY updated_at DESC")
+        .all();
+}
+function createItem(name) {
+    const stmt = db.prepare(`
+    INSERT INTO items (name, updated_at)
+    VALUES (?, datetime('now'))
+  `);
+    const info = stmt.run(name);
+    return db
+        .prepare("SELECT * FROM items WHERE id = ?")
+        .get(info.lastInsertRowid);
+}
+// --- Cat State (single row) ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cat_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    mood TEXT DEFAULT 'idle',
+    energy INTEGER DEFAULT 100,
+    hunger INTEGER DEFAULT 0,
+    last_updated TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+db.exec(`
+  INSERT OR IGNORE INTO cat_state (id, mood, energy, hunger, last_updated)
+  VALUES (1, 'idle', 100, 0, datetime('now'));
+`);
+function getCatState() {
+    return db
+        .prepare("SELECT * FROM cat_state WHERE id = 1")
+        .get();
+}
+function updateCatState(patch) {
+    const current = getCatState();
+    let mood = current.mood;
+    if (patch.mood !== undefined) {
+        if (!isCatAnimationState(patch.mood)) {
+            throw new Error(`Invalid cat state "${patch.mood}". Expected one of: ${CAT_ANIMATION_STATES.join(", ")}`);
+        }
+        mood = patch.mood;
+    }
+    const energy = patch.energy ?? current.energy;
+    const hunger = patch.hunger ?? current.hunger;
+    db.prepare(`
+    UPDATE cat_state
+    SET mood = ?, energy = ?, hunger = ?, last_updated = datetime('now')
+    WHERE id = 1
+  `).run(mood, energy, hunger);
+    return getCatState();
+}
+// --- User Preferences (single row) ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_preferences (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    is_student INTEGER DEFAULT 0,
+    theme TEXT DEFAULT 'light',
+    last_updated TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+db.exec(`
+  INSERT OR IGNORE INTO user_preferences (id, is_student, theme, last_updated)
+  VALUES (1, 0, 'light', datetime('now'));
+`);
+function getUserPreferences() {
+    return db
+        .prepare("SELECT * FROM user_preferences WHERE id = 1")
+        .get();
+}
+function updateUserPreferences(patch) {
+    const current = getUserPreferences();
+    const is_student = patch.is_student !== undefined
+        ? patch.is_student
+            ? 1
+            : 0
+        : current.is_student;
+    const theme = patch.theme ?? current.theme;
+    db.prepare(`
+    UPDATE user_preferences
+    SET is_student = ?, theme = ?, last_updated = datetime('now')
+    WHERE id = 1
+  `).run(is_student, theme);
+    return getUserPreferences();
+}
+// --- User Stats (single row) ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_stats (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    mood TEXT DEFAULT 'ok',
+    room_temperature REAL DEFAULT 22.0,
+    focus_level INTEGER DEFAULT 5,
+    last_updated TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+db.exec(`
+  INSERT OR IGNORE INTO user_stats (id, mood, room_temperature, focus_level, last_updated)
+  VALUES (1, 'ok', 22.0, 5, datetime('now'));
+`);
+function getUserStats() {
+    return db
+        .prepare("SELECT * FROM user_stats WHERE id = 1")
+        .get();
+}
+function updateUserStats(patch) {
+    const current = getUserStats();
+    const mood = patch.mood ?? current.mood;
+    const room_temperature = patch.room_temperature ?? current.room_temperature;
+    const focus_level = patch.focus_level ?? current.focus_level;
+    db.prepare(`
+    UPDATE user_stats
+    SET mood = ?, room_temperature = ?, focus_level = ?, last_updated = datetime('now')
+    WHERE id = 1
+  `).run(mood, room_temperature, focus_level);
+    return getUserStats();
+}

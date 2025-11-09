@@ -118,7 +118,9 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
             ...prev,
             status: 'error',
             error: response.error,
-            nextRunInMs: clampMs(nextRunAtRef.current && nextRunAtRef.current - Date.now()),
+            nextRunInMs: clampMs(
+              nextRunAtRef.current && nextRunAtRef.current - Date.now(),
+            ),
           }));
         } else {
           setState({
@@ -126,7 +128,9 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
             top: response.top,
             scores: response.all.slice(0, 4),
             updatedAt: Date.now(),
-            nextRunInMs: clampMs(nextRunAtRef.current && nextRunAtRef.current - Date.now()),
+            nextRunInMs: clampMs(
+              nextRunAtRef.current && nextRunAtRef.current - Date.now(),
+            ),
           });
         }
       } catch (error) {
@@ -136,7 +140,9 @@ export function useMoodDetection(intervalMs = DEFAULT_INTERVAL_MS): MoodState {
           ...prev,
           status: 'error',
           error: message,
-          nextRunInMs: clampMs(nextRunAtRef.current && nextRunAtRef.current - Date.now()),
+          nextRunInMs: clampMs(
+            nextRunAtRef.current && nextRunAtRef.current - Date.now(),
+          ),
         }));
       } finally {
         detecting = false;
