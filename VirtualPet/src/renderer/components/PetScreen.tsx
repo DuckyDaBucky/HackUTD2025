@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import baseRoomBackdrop from '../../../assets/CatRoomPaid/ExampleRooms/ExampleRoom 2.png';
-import ContextPanel, { type ContextOption } from './ContextPanel';
+import ContextPanel from './ContextPanel';
 import PetStage from './PetStage';
+import ClockDisplay from './ClockDisplay';
 import { usePetAnimation } from '../hooks/usePetAnimation';
 import {
   getPetAnimation,
@@ -65,21 +66,6 @@ export default function PetScreen() {
     scale: isSleeping ? 8.5 : 7,
     alt: `Pet is ${displayedAnimation.state.replace('-', ' ')}`,
   } as const;
-
-  const contextOptions: [ContextOption, ContextOption] = [
-    {
-      label: currentSet.options[0].label,
-      variant: currentSet.options[0].variant,
-      onSelect: () =>
-        !isSleeping && togglePetAnimation(currentSet.options[0].targetState),
-    },
-    {
-      label: currentSet.options[1].label,
-      variant: currentSet.options[1].variant,
-      onSelect: () =>
-        !isSleeping && togglePetAnimation(currentSet.options[1].targetState),
-    },
-  ];
 
   const displayMessage = (() => {
     if (isPetting) {
@@ -154,9 +140,28 @@ export default function PetScreen() {
     layoutClassName.push('sleep-focus');
   }
 
+  const focusState = currentSet.options[1].targetState ?? 'waiting';
+  const breakState = currentSet.options[0].targetState ?? 'excited';
+
+  const handleTimerStart = () => {
+    if (isSleeping) return;
+    togglePetAnimation(focusState);
+  };
+
+  const handleTimerPause = () => {
+    if (isSleeping) return;
+    togglePetAnimation(breakState);
+  };
+
+  const handleTimerReset = () => {
+    if (isSleeping) return;
+    togglePetAnimation('idle');
+  };
+
   return (
     <div className="app-root">
       <div className={shellClassName.join(' ')}>
+        <ClockDisplay />
         <main className={layoutClassName.join(' ')}>
           <PetStage
             sprite={sprite}
@@ -165,9 +170,15 @@ export default function PetScreen() {
             isPetting={isPetting}
             disabled={isSleeping}
             hint={isSleeping ? '' : undefined}
+            narration={displayMessage}
           />
           {isSleeping ? null : (
-            <ContextPanel message={displayMessage} options={contextOptions} />
+            <ContextPanel
+              message=""
+              onTimerStart={handleTimerStart}
+              onTimerPause={handleTimerPause}
+              onTimerReset={handleTimerReset}
+            />
           )}
         </main>
 
