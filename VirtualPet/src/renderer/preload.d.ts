@@ -1,9 +1,10 @@
-import { ElectronHandler } from '../main/preload';
+import { ElectronHandler, EmotionAPI } from '../main/preload';
 
 declare global {
   // eslint-disable-next-line no-unused-vars
   interface Window {
     electron: ElectronHandler;
+    emotionAPI: EmotionAPI;
   }
 }
 

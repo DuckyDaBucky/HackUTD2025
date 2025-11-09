@@ -1,6 +1,7 @@
 // Disable no-unused-vars, broken for spread args
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import type { EmotionDetectionResponse } from '../shared/emotion';
 
 export type Channels = 'ipc-example';
 
@@ -24,6 +25,14 @@ const electronHandler = {
   },
 };
 
+const emotionAPI = {
+  detectEmotion(imageDataUrl: string) {
+    return ipcRenderer.invoke('emotion:detect', imageDataUrl) as Promise<EmotionDetectionResponse>;
+  },
+};
+
 contextBridge.exposeInMainWorld('electron', electronHandler);
+contextBridge.exposeInMainWorld('emotionAPI', emotionAPI);
 
 export type ElectronHandler = typeof electronHandler;
+export type EmotionAPI = typeof emotionAPI;
