@@ -1,13 +1,10 @@
 import { useMoodDetection } from '../hooks/useMoodDetection';
-export type ContextOption = {
-  label: string;
-  variant?: 'primary' | 'secondary';
-  onSelect?: () => void;
-};
-
+import StudyTimerPanel from './StudyTimerPanel';
 export type ContextPanelProps = {
   message: string;
-  options: [ContextOption, ContextOption];
+  onTimerStart: () => void;
+  onTimerPause: () => void;
+  onTimerReset: () => void;
 };
 
 const formatPercent = (value: number) => `${(value * 100).toFixed(0)}%`;
@@ -31,7 +28,12 @@ const formatDuration = (ms?: number) => {
   return `${totalSeconds}s`;
 };
 
-export default function ContextPanel({ message, options }: ContextPanelProps) {
+export default function ContextPanel({
+  message,
+  onTimerStart,
+  onTimerPause,
+  onTimerReset,
+}: ContextPanelProps) {
   const mood = useMoodDetection();
   const isError = mood.status === 'error';
   const nextRunCountdown = formatDuration(mood.nextRunInMs);
@@ -39,60 +41,44 @@ export default function ContextPanel({ message, options }: ContextPanelProps) {
   return (
     <aside className="context-panel" aria-label="Pet status and options">
       <div className="context-card">
-        <p className="context-message">{message}</p>
+        <StudyTimerPanel
+          onStart={onTimerStart}
+          onPause={onTimerPause}
+          onReset={onTimerReset}
+        />
 
-        <div className={`context-mood${isError ? ' is-error' : ''}`}>
-          <span className="context-mood__title">Your mood</span>
+        <div className="context-section">
+          <p className="context-message">{message}</p>
 
-          {mood.status === 'loading' || mood.status === 'idle' ? (
-            <span className="context-mood__status">Checking mood...</span>
-          ) : null}
+          <div className={`context-mood${isError ? ' is-error' : ''}`}>
+            <span className="context-mood__title">Your mood</span>
 
-          {mood.status === 'ready' && mood.top ? (
-            <div className="context-mood__summary">
-              <span className="context-mood__value">{mood.top.label}</span>
-              <span className="context-mood__score">
-                {formatPercent(mood.top.score)}
-              </span>
-            </div>
-          ) : null}
+            {mood.status === 'loading' || mood.status === 'idle' ? (
+              <span className="context-mood__status">Checking mood...</span>
+            ) : null}
 
-          {mood.status === 'error' && mood.error ? (
-            <span className="context-mood__status">{mood.error}</span>
-          ) : null}
+            {mood.status === 'ready' && mood.top ? (
+              <div className="context-mood__summary">
+                <span className="context-mood__value">{mood.top.label}</span>
+                <span className="context-mood__score">
+                  {formatPercent(mood.top.score)}
+                </span>
+              </div>
+            ) : null}
 
-          {mood.status === 'ready' && mood.scores?.length ? (
-            <ul className="context-mood__list">
-              {mood.scores.map((item) => (
-                <li key={item.label}>
-                  <span>{item.label}</span>
-                  <span>{formatPercent(item.score)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+            {mood.status === 'error' && mood.error ? (
+              <span className="context-mood__status">{mood.error}</span>
+            ) : null}
 
-          <span className="context-mood__meta">
-            {nextRunCountdown
-              ? `Next check in ${nextRunCountdown}`
-              : 'Automatic mood checks are running in the background.'}
-            {mood.status === 'ready' && mood.updatedAt
-              ? ` • Last check ${formatTime(mood.updatedAt)}`
-              : ''}
-          </span>
-        </div>
-
-        <div className="option-buttons">
-          {options.map(({ label, variant = 'primary', onSelect }) => (
-            <button
-              key={label}
-              type="button"
-              className={`option-button ${variant}`}
-              onClick={onSelect}
-            >
-              {label}
-            </button>
-          ))}
+            <span className="context-mood__meta">
+              {nextRunCountdown
+                ? `Next check in ${nextRunCountdown}`
+                : 'Automatic mood checks are running.'}
+              {mood.status === 'ready' && mood.updatedAt
+                ? ` · Last check ${formatTime(mood.updatedAt)}`
+                : ''}
+            </span>
+          </div>
         </div>
       </div>
     </aside>
