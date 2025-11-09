@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import roomBackdrop from '../../../assets/CatRoomPaid/ExampleRooms/ExampleRoom 2.png';
+import baseRoomBackdrop from '../../../assets/CatRoomPaid/ExampleRooms/ExampleRoom 2.png';
 import ContextPanel, { type ContextOption } from './ContextPanel';
 import PetStage from './PetStage';
 import { usePetAnimation } from '../hooks/usePetAnimation';
@@ -7,6 +7,7 @@ import {
   getPetAnimation,
   type PetAnimationDefinition,
 } from '../constants/petAnimations';
+// import catSleepingBackdrop from '../../../assets/CatRoomPaid/CatSleeping.png';
 
 type OptionTemplate = {
   label: string;
@@ -50,6 +51,8 @@ export default function PetScreen() {
   const [petOverride, setPetOverride] = useState<PetAnimationDefinition | null>(
     null,
   );
+  const [isSleeping, setIsSleeping] = useState(false);
+
   const isPetting = petOverride !== null;
 
   const displayedAnimation = petOverride ?? activeAnimation;
@@ -59,7 +62,7 @@ export default function PetScreen() {
     frameWidth: 32,
     frameHeight: 32,
     fps: displayedAnimation.fps ?? 8,
-    scale: 7,
+    scale: isSleeping ? 8.5 : 7,
     alt: `Pet is ${displayedAnimation.state.replace('-', ' ')}`,
   } as const;
 
@@ -67,20 +70,32 @@ export default function PetScreen() {
     {
       label: currentSet.options[0].label,
       variant: currentSet.options[0].variant,
-      onSelect: () => togglePetAnimation(currentSet.options[0].targetState),
+      onSelect: () =>
+        !isSleeping && togglePetAnimation(currentSet.options[0].targetState),
     },
     {
       label: currentSet.options[1].label,
       variant: currentSet.options[1].variant,
-      onSelect: () => togglePetAnimation(currentSet.options[1].targetState),
+      onSelect: () =>
+        !isSleeping && togglePetAnimation(currentSet.options[1].targetState),
     },
   ];
 
-  const displayMessage = isPetting
-    ? 'The pet looks a bit shy but loves the attention!'
-    : currentSet.message;
+  const displayMessage = (() => {
+    if (isPetting) {
+      return 'The pet looks a bit shy but loves the attention!';
+    }
+
+    if (isSleeping) {
+      return 'Lights are low. The pet is snoozing peacefully.';
+    }
+
+    return currentSet.message;
+  })();
 
   const handlePet = () => {
+    if (isSleeping) return;
+
     if (revertTimerRef.current) {
       clearTimeout(revertTimerRef.current);
     }
@@ -93,6 +108,22 @@ export default function PetScreen() {
     }, 1200);
   };
 
+  const handleToggleSleep = () => {
+    if (isSleeping) {
+      setIsSleeping(false);
+      setPetOverride(null);
+      return;
+    }
+
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+
+    setPetOverride(null);
+    setIsSleeping(true);
+  };
+
   useEffect(() => {
     return () => {
       if (revertTimerRef.current) {
@@ -103,19 +134,50 @@ export default function PetScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (isSleeping) {
+      setPetOverride(getPetAnimation('sleeping'));
+    }
+  }, [isSleeping]);
+
+  const roomBackdrop = isSleeping ? baseRoomBackdrop : baseRoomBackdrop;
+  const shellClassName = ['pet-shell'];
+  if (isSleeping) {
+    shellClassName.push('is-dark');
+  }
+  if (!isSleeping) {
+    shellClassName.push('is-bright');
+  }
+
+  const layoutClassName = ['pet-layout'];
+  if (isSleeping) {
+    layoutClassName.push('sleep-focus');
+  }
+
   return (
     <div className="app-root">
-      <div className="pet-shell">
-        <main className="pet-layout">
+      <div className={shellClassName.join(' ')}>
+        <main className={layoutClassName.join(' ')}>
           <PetStage
             sprite={sprite}
             backgroundSrc={roomBackdrop}
             onPet={handlePet}
             isPetting={isPetting}
+            disabled={isSleeping}
+            hint={isSleeping ? '' : undefined}
           />
-
-          <ContextPanel message={displayMessage} options={contextOptions} />
+          {isSleeping ? null : (
+            <ContextPanel message={displayMessage} options={contextOptions} />
+          )}
         </main>
+
+        <button
+          type="button"
+          className={`sleep-toggle${isSleeping ? ' active' : ''}`}
+          onClick={handleToggleSleep}
+        >
+          {isSleeping ? 'Turn Lights On' : 'Turn Lights Off'}
+        </button>
       </div>
     </div>
   );

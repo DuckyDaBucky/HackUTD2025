@@ -7,6 +7,7 @@ export type PetStageProps = {
   hint?: string;
   onPet?: () => void;
   isPetting?: boolean;
+  disabled?: boolean;
 };
 
 type StageStyle = CSSProperties & {
@@ -19,6 +20,7 @@ export default function PetStage({
   hint,
   onPet,
   isPetting = false,
+  disabled = false,
 }: PetStageProps) {
   const stageStyle: StageStyle = backgroundSrc
     ? { '--stage-room': `url(${backgroundSrc})` }
@@ -42,13 +44,17 @@ export default function PetStage({
   if (isPetting) {
     stageClassName.push('is-petting');
   }
-  if (onPet) {
+  if (onPet && !disabled) {
     stageClassName.push('is-interactive');
+  }
+
+  if (disabled) {
+    stageClassName.push('sleep-locked');
   }
 
   return (
     <section className="pet-panel" aria-label="Virtual pet">
-      {onPet ? (
+      {onPet && !disabled ? (
         <button
           type="button"
           className={stageClassName.join(' ')}
@@ -99,4 +105,5 @@ PetStage.defaultProps = {
   hint: 'Tap to pet',
   onPet: undefined,
   isPetting: false,
+  disabled: false,
 } satisfies Partial<PetStageProps>;

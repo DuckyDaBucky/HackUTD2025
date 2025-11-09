@@ -8,6 +8,7 @@ import sad from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Sad.pn
 import waiting from '../../../assets/CatPackPaid/Sprites/Classical/Individual/Waiting.png';
 import layDown from '../../../assets/CatPackPaid/Sprites/Classical/Individual/LayDown.png';
 import shy from '../../../assets/CatPackPaid/Sprites/Classical/Individual/shy.png';
+import catSleeping from '../../../assets/CatRoomPaid/CatSleeping.png';
 
 export type PetAnimationDefinition = {
   state: string;
@@ -20,14 +21,16 @@ export const DEFAULT_PET_STATE = 'idle';
 export const petAnimations: PetAnimationDefinition[] = [
   { state: 'idle', animationSrc: idle, fps: 8 },
   { state: 'idle-alt', animationSrc: idle2, fps: 8 },
-  { state: 'sleep', animationSrc: sleep, fps: 4 },
+  { state: 'sleep', animationSrc: sleep, fps: 6 },
   { state: 'sleepy', animationSrc: sleepy, fps: 6 },
   { state: 'excited', animationSrc: excited, fps: 10 },
   { state: 'surprised', animationSrc: surprised, fps: 9 },
   { state: 'sad', animationSrc: sad, fps: 6 },
   { state: 'waiting', animationSrc: waiting, fps: 7 },
   { state: 'laydown', animationSrc: layDown, fps: 12 },
-  { state: 'shy', animationSrc: shy, fps: 13 },
+  { state: 'shy', animationSrc: shy, fps: 10 },
+  { state: 'sleeping', animationSrc: sleep, fps: 6 },
+  { state: 'sleeping-alt', animationSrc: catSleeping, fps: 4 },
 ];
 
 export function getPetAnimation(state: string): PetAnimationDefinition {
