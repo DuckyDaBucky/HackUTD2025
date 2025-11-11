@@ -1,6 +1,9 @@
-import Database from "better-sqlite3";
-import fs from "fs";
-import path from "path";
+import { Redis } from "@upstash/redis";
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || "",
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || "",
+});
 
 const CAT_ANIMATION_STATES = [
   "idle",
@@ -25,6 +28,16 @@ function isCatAnimationState(value: unknown): value is CatAnimationState {
     typeof value === "string" &&
     CAT_ANIMATION_STATES.includes(value as CatAnimationState)
   );
+}
+
+// Helper to get pet ID from parameter or default
+function getPetId(petId?: string): string {
+  return petId || "default";
+}
+
+// Helper to create prefixed keys
+function key(petId: string, type: string): string {
+  return `pet:${petId}:${type}`;
 }
 
 type ItemRow = {
@@ -73,66 +86,61 @@ type SpotifyTokenRow = {
   updated_at: string;
 };
 
-const dataDir = path.join(process.cwd(), "data");
-fs.mkdirSync(dataDir, { recursive: true });
+// Initialize database - no-op for Redis, but kept for compatibility
+export async function initDatabase(): Promise<void> {
+  // Upstash Redis doesn't need initialization
+  console.log("[db] Upstash Redis ready");
+}
 
-const db = new Database(path.join(dataDir, "data.sqlite"));
-
-db.pragma("journal_mode = WAL");
-
-// Items demo table (existing)
-db.exec(`
-  CREATE TABLE IF NOT EXISTS items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+// Items - stored as JSON array
+export async function getItems(petId?: string): Promise<ItemRow[]> {
+  const pet = getPetId(petId);
+  const items = (await redis.get<ItemRow[]>(key(pet, "items"))) || [];
+  return items.sort(
+    (a, b) =>
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   );
-`);
-
-export function getItems(): ItemRow[] {
-  return db
-    .prepare("SELECT * FROM items ORDER BY updated_at DESC")
-    .all() as ItemRow[];
 }
 
-export function createItem(name: string): ItemRow {
-  const stmt = db.prepare(`
-    INSERT INTO items (name, updated_at)
-    VALUES (?, datetime('now'))
-  `);
-  const info = stmt.run(name);
-  return db
-    .prepare("SELECT * FROM items WHERE id = ?")
-    .get(info.lastInsertRowid) as ItemRow;
+export async function createItem(
+  name: string,
+  petId?: string
+): Promise<ItemRow> {
+  const pet = getPetId(petId);
+  const items = await getItems(pet);
+  const newId = items.length > 0 ? Math.max(...items.map((i) => i.id)) + 1 : 1;
+  const newItem: ItemRow = {
+    id: newId,
+    name,
+    updated_at: new Date().toISOString(),
+  };
+  items.push(newItem);
+  await redis.set(key(pet, "items"), items);
+  return newItem;
 }
 
-// --- Cat State (single row) ---
+// Cat State
+const DEFAULT_CAT_STATE: Omit<CatStateRow, "id"> = {
+  mood: "idle",
+  energy: 100,
+  hunger: 0,
+  last_updated: new Date().toISOString(),
+};
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS cat_state (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    mood TEXT DEFAULT 'idle',
-    energy INTEGER DEFAULT 100,
-    hunger INTEGER DEFAULT 0,
-    last_updated TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-db.exec(`
-  INSERT OR IGNORE INTO cat_state (id, mood, energy, hunger, last_updated)
-  VALUES (1, 'idle', 100, 0, datetime('now'));
-`);
-
-export function getCatState(): CatStateRow {
-  return db
-    .prepare("SELECT * FROM cat_state WHERE id = 1")
-    .get() as CatStateRow;
+export async function getCatState(petId?: string): Promise<CatStateRow> {
+  const pet = getPetId(petId);
+  const state =
+    (await redis.get<Omit<CatStateRow, "id">>(key(pet, "cat_state"))) ||
+    DEFAULT_CAT_STATE;
+  return { id: 1, ...state };
 }
 
-export function updateCatState(
-  patch: Partial<{ mood: CatAnimationState; energy: number; hunger: number }>
-) {
-  const current = getCatState();
+export async function updateCatState(
+  patch: Partial<{ mood: CatAnimationState; energy: number; hunger: number }>,
+  petId?: string
+): Promise<CatStateRow> {
+  const pet = getPetId(petId);
+  const current = await getCatState(pet);
 
   let mood = current.mood;
   if (patch.mood !== undefined) {
@@ -146,210 +154,115 @@ export function updateCatState(
     mood = patch.mood;
   }
 
-  const energy = patch.energy ?? current.energy;
-  const hunger = patch.hunger ?? current.hunger;
+  const updated: Omit<CatStateRow, "id"> = {
+    mood,
+    energy: patch.energy ?? current.energy,
+    hunger: patch.hunger ?? current.hunger,
+    last_updated: new Date().toISOString(),
+  };
 
-  db.prepare(
-    `
-    UPDATE cat_state
-    SET mood = ?, energy = ?, hunger = ?, last_updated = datetime('now')
-    WHERE id = 1
-  `
-  ).run(mood, energy, hunger);
-
-  return getCatState();
+  await redis.set(key(pet, "cat_state"), updated);
+  return { id: 1, ...updated };
 }
 
-// --- User Preferences (single row) ---
+// User Preferences
+const DEFAULT_PREFS: Omit<UserPreferencesRow, "id"> = {
+  is_student: 0,
+  theme: "light",
+  timer_method: "pomodoro",
+  last_updated: new Date().toISOString(),
+};
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS user_preferences (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    is_student INTEGER DEFAULT 0,
-    theme TEXT DEFAULT 'light',
-    timer_method TEXT DEFAULT 'pomodoro',
-    last_updated TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-db.exec(`
-  INSERT OR IGNORE INTO user_preferences (id, is_student, theme, timer_method, last_updated)
-  VALUES (1, 0, 'light', 'pomodoro', datetime('now'));
-`);
-
-const userPreferencesColumns = db
-  .prepare("PRAGMA table_info(user_preferences)")
-  .all() as { name: string }[];
-
-if (!userPreferencesColumns.some((column) => column.name === "timer_method")) {
-  db.exec(
-    "ALTER TABLE user_preferences ADD COLUMN timer_method TEXT DEFAULT 'pomodoro'"
-  );
+export async function getUserPreferences(
+  petId?: string
+): Promise<UserPreferencesRow> {
+  const pet = getPetId(petId);
+  const prefs =
+    (await redis.get<Omit<UserPreferencesRow, "id">>(
+      key(pet, "user_preferences")
+    )) || DEFAULT_PREFS;
+  return { id: 1, ...prefs };
 }
 
-export function getUserPreferences(): UserPreferencesRow {
-  return db
-    .prepare(
-      "SELECT id, is_student, theme, COALESCE(timer_method, 'pomodoro') AS timer_method, last_updated FROM user_preferences WHERE id = 1"
-    )
-    .get() as UserPreferencesRow;
+export async function updateUserPreferences(
+  patch: Partial<{ is_student: boolean; theme: string; timer_method: string }>,
+  petId?: string
+): Promise<UserPreferencesRow> {
+  const pet = getPetId(petId);
+  const current = await getUserPreferences(pet);
+  const updated: Omit<UserPreferencesRow, "id"> = {
+    is_student:
+      patch.is_student !== undefined
+        ? patch.is_student
+          ? 1
+          : 0
+        : current.is_student,
+    theme: patch.theme ?? current.theme,
+    timer_method: patch.timer_method ?? current.timer_method,
+    last_updated: new Date().toISOString(),
+  };
+  await redis.set(key(pet, "user_preferences"), updated);
+  return { id: 1, ...updated };
 }
 
-export function updateUserPreferences(
-  patch: Partial<{ is_student: boolean; theme: string; timer_method: string }>
-) {
-  const current = getUserPreferences();
-  const is_student =
-    patch.is_student !== undefined
-      ? patch.is_student
-        ? 1
-        : 0
-      : current.is_student;
-  const theme = patch.theme ?? current.theme;
-  const timer_method = patch.timer_method ?? current.timer_method;
+// User Stats
+const DEFAULT_STATS: Omit<UserStatsRow, "id"> = {
+  mood: "ok",
+  room_temperature: 22.0,
+  focus_level: 5,
+  confidence: 0,
+  noise_pollution: 0,
+  music_is_playing: 0,
+  music_track: null,
+  daily_tip: null,
+  tip_generated_at: null,
+  last_updated: new Date().toISOString(),
+};
 
-  db.prepare(
-    `
-    UPDATE user_preferences
-    SET is_student = ?, theme = ?, timer_method = ?, last_updated = datetime('now')
-    WHERE id = 1
-  `
-  ).run(is_student, theme, timer_method);
-
-  return getUserPreferences();
+export async function getUserStats(petId?: string): Promise<UserStatsRow> {
+  const pet = getPetId(petId);
+  const stats =
+    (await redis.get<Omit<UserStatsRow, "id">>(key(pet, "user_stats"))) ||
+    DEFAULT_STATS;
+  return {
+    id: 1,
+    ...DEFAULT_STATS,
+    ...stats,
+    confidence: stats.confidence ?? 0,
+    noise_pollution: stats.noise_pollution ?? 0,
+    music_is_playing: stats.music_is_playing ?? 0,
+  };
 }
 
-// --- User Stats (single row) ---
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS user_stats (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    mood TEXT DEFAULT 'ok',
-    room_temperature REAL DEFAULT 22.0,
-    focus_level INTEGER DEFAULT 5,
-    confidence REAL DEFAULT 0,
-    noise_pollution REAL DEFAULT 0,
-    music_is_playing INTEGER DEFAULT 0,
-    music_track TEXT,
-    daily_tip TEXT,
-    tip_generated_at TEXT,
-    last_updated TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-// Confidence per mood lives in a dedicated table so that each animation state can
-// carry its own score.
-db.exec(`
-  CREATE TABLE IF NOT EXISTS mood_confidence (
-    mood TEXT PRIMARY KEY,
-    confidence REAL NOT NULL DEFAULT 0
-  );
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS spotify_tokens (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    access_token TEXT,
-    refresh_token TEXT,
-    expires_at INTEGER,
-    token_type TEXT,
-    scope TEXT,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-db.exec(`INSERT OR IGNORE INTO spotify_tokens (id) VALUES (1);`);
-
-const ensureConfidenceRow = db.prepare(
-  `INSERT OR IGNORE INTO mood_confidence (mood, confidence) VALUES (?, 0)`
-);
-CAT_ANIMATION_STATES.forEach((state) => ensureConfidenceRow.run(state));
-
-db.exec(`
-  INSERT OR IGNORE INTO user_stats (id, mood, room_temperature, focus_level, last_updated)
-  VALUES (1, 'ok', 22.0, 5, datetime('now'));
-`);
-
-const userStatsColumns = db.prepare("PRAGMA table_info(user_stats)").all() as {
-  name: string;
-}[];
-
-if (!userStatsColumns.some((column) => column.name === "confidence")) {
-  db.exec("ALTER TABLE user_stats ADD COLUMN confidence REAL DEFAULT 0");
-}
-
-if (!userStatsColumns.some((column) => column.name === "noise_pollution")) {
-  db.exec("ALTER TABLE user_stats ADD COLUMN noise_pollution REAL DEFAULT 0");
-}
-
-if (!userStatsColumns.some((column) => column.name === "daily_tip")) {
-  db.exec("ALTER TABLE user_stats ADD COLUMN daily_tip TEXT");
-}
-
-if (!userStatsColumns.some((column) => column.name === "tip_generated_at")) {
-  db.exec("ALTER TABLE user_stats ADD COLUMN tip_generated_at TEXT");
-}
-
-if (!userStatsColumns.some((column) => column.name === "music_is_playing")) {
-  db.exec(
-    "ALTER TABLE user_stats ADD COLUMN music_is_playing INTEGER DEFAULT 0"
-  );
-}
-
-if (!userStatsColumns.some((column) => column.name === "music_track")) {
-  db.exec("ALTER TABLE user_stats ADD COLUMN music_track TEXT");
-}
-
-export function getUserStats(): UserStatsRow {
-  return db
-    .prepare(
-      `SELECT id,
-              mood,
-              room_temperature,
-              focus_level,
-              COALESCE(confidence, 0) AS confidence,
-              COALESCE(noise_pollution, 0) AS noise_pollution,
-              COALESCE(music_is_playing, 0) AS music_is_playing,
-              music_track,
-              daily_tip,
-              tip_generated_at,
-              last_updated
-       FROM user_stats
-       WHERE id = 1`
-    )
-    .get() as UserStatsRow;
-}
-
-export function getMoodConfidence(): Record<CatAnimationState, number> {
-  const rows = db
-    .prepare("SELECT mood, confidence FROM mood_confidence")
-    .all() as { mood: CatAnimationState; confidence: number }[];
+// Mood Confidence - stored as a map
+export async function getMoodConfidence(
+  petId?: string
+): Promise<Record<CatAnimationState, number>> {
+  const pet = getPetId(petId);
+  const confidence =
+    (await redis.get<Partial<Record<CatAnimationState, number>>>(
+      key(pet, "mood_confidence")
+    )) || {};
 
   const map = {} as Record<CatAnimationState, number>;
   CAT_ANIMATION_STATES.forEach((state) => {
-    map[state] = 0;
+    map[state] = confidence[state] ?? 0;
   });
-  rows.forEach((row) => {
-    map[row.mood] = row.confidence ?? 0;
-  });
-
   return map;
 }
 
-export function updateMoodConfidence(
+export async function updateMoodConfidence(
   mood: CatAnimationState,
-  confidence: number
-) {
-  db.prepare(
-    `
-    INSERT INTO mood_confidence (mood, confidence)
-    VALUES (?, ?)
-    ON CONFLICT(mood) DO UPDATE SET confidence = excluded.confidence
-  `
-  ).run(mood, confidence);
+  confidence: number,
+  petId?: string
+): Promise<void> {
+  const pet = getPetId(petId);
+  const current = await getMoodConfidence(pet);
+  current[mood] = confidence;
+  await redis.set(key(pet, "mood_confidence"), current);
 }
 
-export function updateUserStats(
+export async function updateUserStats(
   patch: Partial<{
     mood: string;
     room_temperature: number;
@@ -358,91 +271,94 @@ export function updateUserStats(
     noise_pollution: number;
     music_is_playing: number;
     music_track: string | null;
-  }>
-) {
-  const current = getUserStats();
-  const mood = patch.mood ?? current.mood;
-  const room_temperature = patch.room_temperature ?? current.room_temperature;
-  const focus_level = patch.focus_level ?? current.focus_level;
-  const confidence =
-    patch.confidence !== undefined ? patch.confidence : current.confidence;
-  const noise_pollution =
-    patch.noise_pollution !== undefined
-      ? patch.noise_pollution
-      : current.noise_pollution;
-  const music_is_playing =
-    patch.music_is_playing !== undefined
-      ? patch.music_is_playing
-      : current.music_is_playing ?? 0;
-  const music_track =
-    patch.music_track !== undefined ? patch.music_track : current.music_track;
+  }>,
+  petId?: string
+): Promise<UserStatsRow> {
+  const pet = getPetId(petId);
+  const current = await getUserStats(pet);
+  const updated: Omit<UserStatsRow, "id"> = {
+    ...current,
+    mood: patch.mood ?? current.mood,
+    room_temperature: patch.room_temperature ?? current.room_temperature,
+    focus_level: patch.focus_level ?? current.focus_level,
+    confidence:
+      patch.confidence !== undefined ? patch.confidence : current.confidence,
+    noise_pollution:
+      patch.noise_pollution !== undefined
+        ? patch.noise_pollution
+        : current.noise_pollution,
+    music_is_playing:
+      patch.music_is_playing !== undefined
+        ? patch.music_is_playing
+        : current.music_is_playing ?? 0,
+    music_track:
+      patch.music_track !== undefined ? patch.music_track : current.music_track,
+    last_updated: new Date().toISOString(),
+  };
 
-  db.prepare(
-    `
-    UPDATE user_stats
-    SET mood = ?, room_temperature = ?, focus_level = ?, confidence = ?, noise_pollution = ?, music_is_playing = ?, music_track = ?, last_updated = datetime('now')
-    WHERE id = 1
-  `
-  ).run(
-    mood,
-    room_temperature,
-    focus_level,
-    confidence,
-    noise_pollution,
-    music_is_playing,
-    music_track
-  );
+  await redis.set(key(pet, "user_stats"), updated);
 
   if (
     patch.confidence !== undefined &&
     patch.mood &&
     isCatAnimationState(patch.mood)
   ) {
-    updateMoodConfidence(patch.mood, patch.confidence);
+    await updateMoodConfidence(patch.mood, patch.confidence, pet);
   }
 
-  return getUserStats();
+  return { id: 1, ...updated };
 }
 
-export function setDailyTip(tip: string, generatedAt: string) {
-  db.prepare(
-    `
-    UPDATE user_stats
-    SET daily_tip = ?, tip_generated_at = ?
-    WHERE id = 1
-  `
-  ).run(tip, generatedAt);
+export async function setDailyTip(
+  tip: string,
+  generatedAt: string,
+  petId?: string
+): Promise<void> {
+  const pet = getPetId(petId);
+  const current = await getUserStats(pet);
+  await redis.set(key(pet, "user_stats"), {
+    ...current,
+    daily_tip: tip,
+    tip_generated_at: generatedAt,
+  });
 }
 
-export function setMusicPlayback(
+export async function setMusicPlayback(
   isPlaying: boolean,
-  track: string | null
-): UserStatsRow {
-  db.prepare(
-    `
-    UPDATE user_stats
-    SET music_is_playing = ?, music_track = ?, last_updated = datetime('now')
-    WHERE id = 1
-  `
-  ).run(isPlaying ? 1 : 0, track ?? null);
-
-  return getUserStats();
+  track: string | null,
+  petId?: string
+): Promise<UserStatsRow> {
+  const pet = getPetId(petId);
+  const current = await getUserStats(pet);
+  const updated: Omit<UserStatsRow, "id"> = {
+    ...current,
+    music_is_playing: isPlaying ? 1 : 0,
+    music_track: track,
+    last_updated: new Date().toISOString(),
+  };
+  await redis.set(key(pet, "user_stats"), updated);
+  return { id: 1, ...updated };
 }
 
-export function getSpotifyTokens(): SpotifyTokenRow {
-  return db
-    .prepare(
-      `SELECT id,
-              access_token,
-              refresh_token,
-              expires_at,
-              token_type,
-              scope,
-              updated_at
-       FROM spotify_tokens
-       WHERE id = 1`
-    )
-    .get() as SpotifyTokenRow;
+// Spotify Tokens
+const DEFAULT_SPOTIFY_TOKENS: Omit<SpotifyTokenRow, "id"> = {
+  access_token: null,
+  refresh_token: null,
+  expires_at: null,
+  token_type: null,
+  scope: null,
+  updated_at: new Date().toISOString(),
+};
+
+export async function getSpotifyTokens(
+  petId?: string
+): Promise<SpotifyTokenRow> {
+  const pet = getPetId(petId);
+  const tokens =
+    (await redis.get<Omit<SpotifyTokenRow, "id">>(
+      key(pet, "spotify_tokens")
+    )) || DEFAULT_SPOTIFY_TOKENS;
+  return { id: 1, ...tokens };
 }
 
 type SpotifyTokenUpdate = {
@@ -453,52 +369,42 @@ type SpotifyTokenUpdate = {
   scope?: string | null;
 };
 
-export function setSpotifyTokens(update: SpotifyTokenUpdate) {
-  const current = getSpotifyTokens();
+export async function setSpotifyTokens(
+  update: SpotifyTokenUpdate,
+  petId?: string
+): Promise<SpotifyTokenRow> {
+  const pet = getPetId(petId);
+  const current = await getSpotifyTokens(pet);
 
-  const accessToken =
-    update.accessToken !== undefined
-      ? update.accessToken
-      : current.access_token;
-  const refreshToken =
-    update.refreshToken !== undefined
-      ? update.refreshToken
-      : current.refresh_token;
-  const expiresAt =
-    update.expiresAt !== undefined ? update.expiresAt : current.expires_at;
-  const tokenType =
-    update.tokenType !== undefined ? update.tokenType : current.token_type;
-  const scope = update.scope !== undefined ? update.scope : current.scope;
+  const updated: Omit<SpotifyTokenRow, "id"> = {
+    access_token:
+      update.accessToken !== undefined
+        ? update.accessToken
+        : current.access_token,
+    refresh_token:
+      update.refreshToken !== undefined
+        ? update.refreshToken
+        : current.refresh_token,
+    expires_at:
+      update.expiresAt !== undefined ? update.expiresAt : current.expires_at,
+    token_type:
+      update.tokenType !== undefined ? update.tokenType : current.token_type,
+    scope: update.scope !== undefined ? update.scope : current.scope,
+    updated_at: new Date().toISOString(),
+  };
 
-  db.prepare(
-    `
-    UPDATE spotify_tokens
-    SET access_token = ?,
-        refresh_token = ?,
-        expires_at = ?,
-        token_type = ?,
-        scope = ?,
-        updated_at = datetime('now')
-    WHERE id = 1
-  `
-  ).run(accessToken, refreshToken, expiresAt, tokenType, scope);
-
-  return getSpotifyTokens();
+  await redis.set(key(pet, "spotify_tokens"), updated);
+  return { id: 1, ...updated };
 }
 
-export function clearSpotifyTokens() {
-  db.prepare(
-    `
-    UPDATE spotify_tokens
-    SET access_token = NULL,
-        refresh_token = NULL,
-        expires_at = NULL,
-        token_type = NULL,
-        scope = NULL,
-        updated_at = datetime('now')
-    WHERE id = 1
-  `
-  ).run();
-
-  return getSpotifyTokens();
+export async function clearSpotifyTokens(
+  petId?: string
+): Promise<SpotifyTokenRow> {
+  const pet = getPetId(petId);
+  const updated: Omit<SpotifyTokenRow, "id"> = {
+    ...DEFAULT_SPOTIFY_TOKENS,
+    updated_at: new Date().toISOString(),
+  };
+  await redis.set(key(pet, "spotify_tokens"), updated);
+  return { id: 1, ...updated };
 }

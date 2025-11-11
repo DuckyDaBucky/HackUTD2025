@@ -5,6 +5,7 @@ import http from "http";
 import cors from "cors";
 import { WebSocketServer, WebSocket } from "ws";
 import {
+  initDatabase,
   getItems,
   createItem,
   getCatState,
@@ -40,15 +41,15 @@ app.use(express.json());
 
 // --- Minimal REST (optional, handy for debug) ---
 
-app.get("/api/items", (_req, res) => {
-  res.json(getItems());
+app.get("/api/items", async (_req, res) => {
+  res.json(await getItems());
 });
 
-app.post("/api/items", (req, res) => {
+app.post("/api/items", async (req, res) => {
   const name = (req.body?.name || "").trim();
   if (!name) return res.status(400).json({ error: "name required" });
 
-  const item = createItem(name);
+  const item = await createItem(name);
   broadcast({ type: "item:created", payload: item });
   res.json(item);
 });
@@ -111,7 +112,7 @@ app.get("/auth/spotify/callback", async (req, res) => {
   }
 
   await syncSpotifyPlayback();
-  const payload = buildStatsPayload();
+  const payload = await buildStatsPayload();
   lastStatsPayload = payload;
   broadcast({ type: "stats:state", payload });
 
@@ -139,9 +140,11 @@ wss.on("connection", (ws) => {
   clients.add(ws);
   console.log("WS client connected");
 
-  send(ws, { type: "cat:state", payload: getCatState() });
-  send(ws, { type: "prefs:state", payload: getUserPreferences() });
-  send(ws, { type: "stats:state", payload: buildStatsPayload() });
+  (async () => {
+    send(ws, { type: "cat:state", payload: await getCatState() });
+    send(ws, { type: "prefs:state", payload: await getUserPreferences() });
+    send(ws, { type: "stats:state", payload: await buildStatsPayload() });
+  })();
 
   ws.on("message", async (raw) => {
     let msg: any;
@@ -160,13 +163,13 @@ wss.on("connection", (ws) => {
       // --- Cat State ---
 
       case "cat:get_state": {
-        const cat = getCatState();
+        const cat = await getCatState();
         return send(ws, { type: "cat:state", payload: cat });
       }
 
       case "cat:update_state": {
         try {
-          const updated = updateCatState((payload || {}) as any);
+          const updated = await updateCatState((payload || {}) as any);
           broadcast({ type: "cat:state", payload: updated });
         } catch (error) {
           const message =
@@ -181,12 +184,12 @@ wss.on("connection", (ws) => {
       // --- User Preferences ---
 
       case "prefs:get": {
-        const prefs = getUserPreferences();
+        const prefs = await getUserPreferences();
         return send(ws, { type: "prefs:state", payload: prefs });
       }
 
       case "prefs:update": {
-        const updated = updateUserPreferences(payload || {});
+        const updated = await updateUserPreferences(payload || {});
         broadcast({ type: "prefs:state", payload: updated });
         return;
       }
@@ -194,12 +197,15 @@ wss.on("connection", (ws) => {
       // --- User Stats ---
 
       case "stats:get": {
-        return send(ws, { type: "stats:state", payload: buildStatsPayload() });
+        return send(ws, {
+          type: "stats:state",
+          payload: await buildStatsPayload(),
+        });
       }
 
       case "stats:update": {
         const patch = payload || {};
-        updateUserStats(patch);
+        await updateUserStats(patch);
         if (
           typeof patch.confidence === "number" ||
           typeof patch.mood === "string"
@@ -210,7 +216,7 @@ wss.on("connection", (ws) => {
             console.error("[tips] Failed to generate tip", error);
           }
         }
-        broadcast({ type: "stats:state", payload: buildStatsPayload() });
+        broadcast({ type: "stats:state", payload: await buildStatsPayload() });
         return;
       }
 
@@ -240,9 +246,9 @@ function broadcast(message: any) {
   }
 }
 
-function buildStatsPayload() {
-  const stats = getUserStats();
-  const confidenceMap = getMoodConfidence();
+async function buildStatsPayload() {
+  const stats = await getUserStats();
+  const confidenceMap = await getMoodConfidence();
   const moodKey = stats.mood as CatAnimationState;
   const mapConfidence = confidenceMap[moodKey] ?? 0;
   const confidence =
@@ -251,20 +257,42 @@ function buildStatsPayload() {
     ...stats,
     confidence,
     confidence_map: confidenceMap,
-    spotify_connected: spotifyIntegrationEnabled(),
+    spotify_connected: await spotifyIntegrationEnabled(),
   };
 }
 
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+let lastCatState: Awaited<ReturnType<typeof getCatState>>;
+let lastPrefs: Awaited<ReturnType<typeof getUserPreferences>>;
+let lastStatsPayload: Awaited<ReturnType<typeof buildStatsPayload>>;
 
-let lastCatState = getCatState();
-let lastPrefs = getUserPreferences();
-let lastStatsPayload = buildStatsPayload();
+async function startServer() {
+  try {
+    await initDatabase();
+    console.log("[db] Database initialized");
+  } catch (error) {
+    console.error("[db] Failed to initialize database:", error);
+    process.exit(1);
+  }
+
+  // Initialize state after database is ready
+  lastCatState = await getCatState();
+  lastPrefs = await getUserPreferences();
+  lastStatsPayload = await buildStatsPayload();
+
+  // Generate initial tip
+  void maybeGenerateDailyTip().catch((error) =>
+    console.error("[tips] Failed to generate initial tip", error)
+  );
+
+  server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();
 
 function catStateChanged(
-  prev: ReturnType<typeof getCatState>,
+  prev: Awaited<ReturnType<typeof getCatState>>,
   next: typeof prev
 ) {
   return (
@@ -276,7 +304,7 @@ function catStateChanged(
 }
 
 function prefsChanged(
-  prev: ReturnType<typeof getUserPreferences>,
+  prev: Awaited<ReturnType<typeof getUserPreferences>>,
   next: typeof prev
 ) {
   return (
@@ -287,8 +315,8 @@ function prefsChanged(
 }
 
 function statsChanged(
-  prev: ReturnType<typeof buildStatsPayload>,
-  next: ReturnType<typeof buildStatsPayload>
+  prev: Awaited<ReturnType<typeof buildStatsPayload>>,
+  next: Awaited<ReturnType<typeof buildStatsPayload>>
 ) {
   return (
     prev.mood !== next.mood ||
@@ -309,13 +337,13 @@ function statsChanged(
 async function pollAndBroadcast() {
   await syncSpotifyPlayback();
 
-  const nextCat = getCatState();
+  const nextCat = await getCatState();
   if (catStateChanged(lastCatState, nextCat)) {
     lastCatState = nextCat;
     broadcast({ type: "cat:state", payload: nextCat });
   }
 
-  const nextPrefs = getUserPreferences();
+  const nextPrefs = await getUserPreferences();
   if (prefsChanged(lastPrefs, nextPrefs)) {
     lastPrefs = nextPrefs;
     broadcast({ type: "prefs:state", payload: nextPrefs });
@@ -327,7 +355,7 @@ async function pollAndBroadcast() {
     console.error("[tips] Failed to refresh tip", error);
   }
 
-  const nextStatsPayload = buildStatsPayload();
+  const nextStatsPayload = await buildStatsPayload();
   if (statsChanged(lastStatsPayload, nextStatsPayload)) {
     lastStatsPayload = nextStatsPayload;
     broadcast({ type: "stats:state", payload: nextStatsPayload });
@@ -338,12 +366,8 @@ setInterval(() => {
   void pollAndBroadcast();
 }, 1500);
 
-void maybeGenerateDailyTip().catch((error) =>
-  console.error("[tips] Failed to generate initial tip", error)
-);
-
 async function syncSpotifyPlayback() {
-  if (!spotifyIntegrationEnabled()) {
+  if (!(await spotifyIntegrationEnabled())) {
     return;
   }
 
@@ -359,8 +383,8 @@ async function syncSpotifyPlayback() {
       lastStatsPayload.music_is_playing !== isPlaying ||
       (lastStatsPayload.music_track ?? null) !== track
     ) {
-      setMusicPlayback(playback.isPlaying, track);
-      const payload = buildStatsPayload();
+      await setMusicPlayback(playback.isPlaying, track);
+      const payload = await buildStatsPayload();
       lastStatsPayload = payload;
       broadcast({ type: "stats:state", payload });
     }

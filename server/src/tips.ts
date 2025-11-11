@@ -41,8 +41,8 @@ const lowerFirst = (value: string) =>
   value.length === 0 ? value : value[0].toLowerCase() + value.slice(1);
 
 function buildFallbackTip(
-  stats: ReturnType<typeof getUserStats>,
-  prefs: ReturnType<typeof getUserPreferences>
+  stats: Awaited<ReturnType<typeof getUserStats>>,
+  prefs: Awaited<ReturnType<typeof getUserPreferences>>
 ): string {
   const mood =
     typeof stats.mood === "string" && stats.mood.length > 0
@@ -116,9 +116,11 @@ function buildFallbackTip(
   return `${opener} ${guidance}`.replace(/\s+/g, " ").trim();
 }
 
-export async function maybeGenerateDailyTip(): Promise<string | null> {
-  const stats = getUserStats();
-  const prefs = getUserPreferences();
+export async function maybeGenerateDailyTip(
+  petId?: string
+): Promise<string | null> {
+  const stats = await getUserStats(petId);
+  const prefs = await getUserPreferences(petId);
 
   if (
     stats.daily_tip &&
@@ -129,8 +131,8 @@ export async function maybeGenerateDailyTip(): Promise<string | null> {
   }
 
   const fallback = buildFallbackTip(stats, prefs);
-  const setAndReturnFallback = () => {
-    setDailyTip(fallback, new Date().toISOString());
+  const setAndReturnFallback = async () => {
+    await setDailyTip(fallback, new Date().toISOString(), petId);
     return fallback;
   };
 
@@ -162,12 +164,12 @@ export async function maybeGenerateDailyTip(): Promise<string | null> {
     ).trim();
 
     if (tip.length > 0) {
-      setDailyTip(tip, new Date().toISOString());
+      await setDailyTip(tip, new Date().toISOString(), petId);
       return tip;
     }
   } catch (error) {
     console.warn("[tips] Falling back to local tip", error);
   }
 
-  return setAndReturnFallback();
+  return await setAndReturnFallback();
 }

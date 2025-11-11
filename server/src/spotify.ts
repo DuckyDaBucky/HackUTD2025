@@ -1,8 +1,4 @@
-import {
-  clearSpotifyTokens,
-  getSpotifyTokens,
-  setSpotifyTokens,
-} from "./db";
+import { clearSpotifyTokens, getSpotifyTokens, setSpotifyTokens } from "./db";
 
 type SpotifyConfig = {
   clientId: string;
@@ -20,8 +16,7 @@ export type SpotifyPlaybackState = {
 };
 
 const config: SpotifyConfig | null =
-  process.env.SPOTIFY_CLIENT_ID &&
-  process.env.SPOTIFY_CLIENT_SECRET
+  process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET
     ? {
         clientId: process.env.SPOTIFY_CLIENT_ID,
         clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
@@ -32,21 +27,21 @@ let cachedTokens: SpotifyTokens | null = null;
 
 const TOKEN_ENDPOINT = "https://accounts.spotify.com/api/token";
 const AUTH_ENDPOINT = "https://accounts.spotify.com/authorize";
-const REQUEST_SCOPE =
-  "user-read-currently-playing user-read-playback-state";
+const REQUEST_SCOPE = "user-read-currently-playing user-read-playback-state";
 
 function fallbackRefreshToken(): string | null {
   return process.env.SPOTIFY_REFRESH_TOKEN ?? null;
 }
 
-async function refreshAccessToken(): Promise<SpotifyTokens | null> {
+async function refreshAccessToken(
+  petId?: string
+): Promise<SpotifyTokens | null> {
   if (!config) {
     return null;
   }
 
-  const stored = getSpotifyTokens();
-  const refreshToken =
-    stored.refresh_token ?? fallbackRefreshToken();
+  const stored = await getSpotifyTokens(petId);
+  const refreshToken = stored.refresh_token ?? fallbackRefreshToken();
 
   if (!refreshToken) {
     return null;
@@ -95,23 +90,26 @@ async function refreshAccessToken(): Promise<SpotifyTokens | null> {
     expiresAt,
   };
 
-  setSpotifyTokens({
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token ?? stored.refresh_token ?? refreshToken,
-    expiresAt,
-    tokenType: data.token_type ?? "Bearer",
-    scope: data.scope ?? stored.scope ?? REQUEST_SCOPE,
-  });
+  await setSpotifyTokens(
+    {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? stored.refresh_token ?? refreshToken,
+      expiresAt,
+      tokenType: data.token_type ?? "Bearer",
+      scope: data.scope ?? stored.scope ?? REQUEST_SCOPE,
+    },
+    petId
+  );
 
   return cachedTokens;
 }
 
-async function getAccessToken(): Promise<string | null> {
+async function getAccessToken(petId?: string): Promise<string | null> {
   if (!config) {
     return null;
   }
 
-  const stored = getSpotifyTokens();
+  const stored = await getSpotifyTokens(petId);
   if (
     stored.access_token &&
     stored.expires_at &&
@@ -127,14 +125,15 @@ async function getAccessToken(): Promise<string | null> {
     return cachedTokens.accessToken;
   }
 
-  const refreshed = await refreshAccessToken();
+  const refreshed = await refreshAccessToken(petId);
   return refreshed?.accessToken ?? null;
 }
 
 export async function fetchSpotifyPlayback(
-  hasRetried = false
+  hasRetried = false,
+  petId?: string
 ): Promise<SpotifyPlaybackState | null> {
-  const token = await getAccessToken();
+  const token = await getAccessToken(petId);
   if (!token) {
     return null;
   }
@@ -168,8 +167,7 @@ export async function fetchSpotifyPlayback(
     const name = body.item.name ?? "Unknown Track";
     const artists =
       body.item.artists?.map((artist) => artist.name).filter(Boolean) ?? [];
-    const track =
-      artists.length > 0 ? `${name} — ${artists.join(", ")}` : name;
+    const track = artists.length > 0 ? `${name} — ${artists.join(", ")}` : name;
 
     return { isPlaying: true, track };
   }
@@ -177,13 +175,13 @@ export async function fetchSpotifyPlayback(
   if (response.status === 401 && !hasRetried) {
     // Access token expired or revoked. Try one refresh and retry once.
     cachedTokens = null;
-    await refreshAccessToken();
-    return fetchSpotifyPlayback(true);
+    await refreshAccessToken(petId);
+    return fetchSpotifyPlayback(true, petId);
   }
 
   if (response.status === 401) {
     console.warn("[spotify] Unauthorized; clearing stored tokens");
-    clearSpotifyTokens();
+    await clearSpotifyTokens(petId);
   }
 
   const text = await response.text();
@@ -191,11 +189,13 @@ export async function fetchSpotifyPlayback(
   return null;
 }
 
-export function spotifyIntegrationEnabled() {
+export async function spotifyIntegrationEnabled(
+  petId?: string
+): Promise<boolean> {
   if (!config) {
     return false;
   }
-  const tokens = getSpotifyTokens();
+  const tokens = await getSpotifyTokens(petId);
   return Boolean(tokens.refresh_token ?? fallbackRefreshToken());
 }
 
@@ -222,7 +222,8 @@ export function getSpotifyAuthorizeUrl(state: string, redirectUri: string) {
 
 export async function exchangeSpotifyCode(
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  petId?: string
 ): Promise<boolean> {
   if (!config) {
     return false;
@@ -267,13 +268,16 @@ export async function exchangeSpotifyCode(
 
   const expiresAt = Date.now() + (data.expires_in - 30) * 1000;
 
-  setSpotifyTokens({
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt,
-    tokenType: data.token_type ?? "Bearer",
-    scope: data.scope ?? REQUEST_SCOPE,
-  });
+  await setSpotifyTokens(
+    {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresAt,
+      tokenType: data.token_type ?? "Bearer",
+      scope: data.scope ?? REQUEST_SCOPE,
+    },
+    petId
+  );
 
   cachedTokens = {
     accessToken: data.access_token,
